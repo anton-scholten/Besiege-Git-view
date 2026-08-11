@@ -24,7 +24,8 @@ every version of that machine:
 | *thumbnail* | 2026-06-27  15:39:05  SAVED | +1 | ~8 | — |
 
 Each row says what that save did to the machine compared with the save before
-it. Click any column heading to sort by it, and again to reverse it.
+it. Every heading carries a pair of arrows: the lit one is the order in force,
+so clicking a heading sorts by it and clicking again reverses it.
 
 Click a row and that version loads, with its changes drawn over it:
 
@@ -32,7 +33,9 @@ Click a row and that version loads, with its changes drawn over it:
 - **orange** — blocks it moved, rotated, rescaled or retuned
 - **red** — blocks it deleted, left standing where they used to be
 
-`Ctrl+Y` hides and shows the window and its overlay.
+`Ctrl+Y` hides and shows the window and its overlay. It also steps aside on its
+own whenever the game puts up a menu — escape, load, options — and comes back
+when the menu does, the same way Besiege's own block panel behaves.
 
 ## Installing
 

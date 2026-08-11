@@ -84,9 +84,170 @@ since C# delegates are not serialised — so a copied delete button does not
 delete anything. `ResetDelegates()` anyway, against a future Besiege that wires
 them up differently.
 
-Assign the icon through `Renderer.material`, never `sharedMaterial`: the
-original is shared with the button it was copied from and with every other
-slot's copy of it, so writing to it puts your icon on the game's own buttons.
+### You cannot repaint a slot button by setting its texture
+
+`Renderer.material.mainTexture = mine` on a copied slot button **does nothing
+visible**. The copy keeps the icon it was cloned with, no error, no warning.
+`mainTexture` writes `_MainTex`, and these buttons are drawn by one of Besiege's
+own shaders (`Custom/Stencil/…` appears in `Player.log`) which need not have that
+property or need not sample it — and there is no way to tell from outside.
+
+Building your own quad instead does not work either, or at least not easily: the
+second attempt at this parented a quad to the button's face and it came out
+invisible. Which plane the face lies in, which way its normal points and how big
+it is in its own local space all have to be right, and none of them can be
+checked from outside a running game.
+
+**A copied button has no face in the frame you copy it.** The third attempt
+looked for a `MeshFilter` with a mesh on it and found none at all — on every
+slot, every time. Whatever builds a slot button's visuals runs in an `Awake` or a
+`Start` of its own, so the clone is bare in the frame `Instantiate` returns it
+and furnished a frame or two later. Anything that repaints one has to be retried
+across frames, and the log line that says "nothing to draw on" is what a
+too-early look produces, not a button that draws nothing.
+
+**A slot button's face is a `SpriteRenderer`.** That is the answer, arrived at by
+logging the kind of every renderer on the clone. So the thing to set is
+`spriteRenderer.sprite`, and no material or mesh comes into it.
+
+Size it against the sprite it replaces. A sprite draws
+`rect.height / pixelsPerUnit` units tall and `Sprite.Create` assumes 100 pixels
+per unit unless told otherwise, so a texture that is not the size of Besiege's
+comes out the wrong size on screen — half the trash can beside it, in this case.
+Ask the old sprite for its world height and pick a density that matches it:
+
+```csharp
+float worldHeight = replacing.rect.height / replacing.pixelsPerUnit;
+float density     = myTexture.height / worldHeight;
+Sprite.Create(myTexture, rect, pivot, density);
+```
+
+For anything that is *not* a sprite, **assign a whole new material to the
+renderer**. The geometry is then Besiege's — right plane, right winding, right
+size — and the only thing that changed is the material, which is yours and whose
+shader you chose:
+
+```csharp
+face.sharedMaterials = new Material[] { mine };   // not material.mainTexture
+```
+
+Guard one thing: a UI mesh's texture coordinates may point into a shared atlas
+rather than spanning 0..1, and a quad cut out for a trash can would then show
+that same corner of your texture. Copy the mesh and remap its `uv` from vertex
+position within the mesh bounds — over the two axes the bounds actually have a
+size in, so it works whichever plane the quad lies in. `Mesh.isReadable` says
+whether that is possible at all; keep the original when it is not.
+
+`Shader.Find` only finds shaders included in the player's build. Both
+`Unlit/Transparent` and `Particles/Alpha Blended` are confirmed present in
+Besiege's.
+
+If you do assign a material anyway, go through `Renderer.material`, never
+`sharedMaterial`: the original is shared with the button it was copied from and
+with every other slot's copy of it, so writing to it puts your icon on the game's
+own buttons.
+
+### A slot has nine buttons and shows one
+
+Measured on a real folder slot: nine `SimpleUIButton`s, of which exactly **one**
+is active — the delete button, in a bottom corner at x = 1.2 in slot units. The
+other eight (upload, cloud sync, confirm-delete, and so on) are inactive and
+scattered, two of them 0.018 apart.
+
+So "the smallest gap between any two buttons" is not a usable pitch, and any
+scan for a free spot has to filter on `activeInHierarchy` first or it will find
+the slot entirely full. With one visible button in a corner, its mirror through
+the slot's middle is the obvious place for a second.
+
+## Looking like a Besiege panel
+
+Four things carry most of the resemblance, and all four can be taken rather than
+approximated:
+
+- **Spawn UI Factory's `Text` prefab for every label**, not a bare uGUI `Text`.
+  It brings the game's font and its letter spacing with it, which is most of the
+  difference between a panel that looks like Besiege's and one that looks like a
+  mod's.
+- **Rows are separate buttons, not a banded table.** Besiege's own panels are a
+  stack of blocks with a margin either side and a gap between them. Edge-to-edge
+  rows read as a spreadsheet.
+- **The selected one goes solid red**, `Besiege.UI.Consts.C_BG_RED` =
+  `(0.92, 0.13, 0.29)`, with white text on it. That is what the block panel does
+  to the option in force. Give up any other text colours on that row; they are
+  not worth reading on red.
+- **Capitals.** Besiege writes its interface in them.
+
+The rest of the palette, for reference:
+
+| Constant | Value |
+| --- | --- |
+| `C_BG_BLACK` | `(0.03, 0.03, 0.044, 0.2)` |
+| `C_BG_RED` | `(0.92, 0.13, 0.29)` |
+| `C_BG_INPUT_FIELD` | `(0, 0, 0, 0.549)` |
+| `C_BG_TOOLTIP` | `(0.106, 0.114, 0.132)` — the one opaque colour |
+| `C_RESET` | `(0.012, 1, 0.847, 0.5)` — the cyan |
+| `C_BG_SCROLLBAR` | `(1, 1, 1, 0.313)` |
+| `C_BG_SCROLLBAR_BACK` | `(0.046, 0.048, 0.058, 0.414)` |
+
+### The hover swell drags text sideways
+
+UIFactory's buttons scale about their pivot when the pointer is over them, and
+they are pivoted in the middle. On a control as wide as a table row that is very
+visible: a left-aligned label slides left, a right-aligned one slides right, and
+it reads as the text jumping rather than as the row lighting up. Pin the pivot to
+whichever edge the text is aligned to and the swell happens entirely on the other
+side. Moving a pivot moves the rect, so put the insets back afterwards.
+
+`ScaleAnimation.Target` is public, so it can be checked; `ButtonHoverScale` and
+`ButtonPressedScale` are not, so how much it swells is not yours to tune — only
+where it grows from.
+
+### Centre a column's contents; do not try to align them to its edge
+
+If the rows are inset inside a margin and the heading strip is not, their column
+fractions are fractions of different widths and every heading sits a few pixels
+off the values under it. That much is arithmetic and can be fixed.
+
+What cannot be fixed by arithmetic is where an *edge-aligned* label ends up
+inside a `Text Button`. Its label sits somewhere down a hierarchy of the prefab's
+own, so stretching "the label" insets it inside whatever container it happens to
+be in rather than inside the button, and the heading lands some unpredictable
+distance off its column — twenty pixels, in this mod, with no way to say why from
+outside.
+
+Centre both the heading and the values instead. A centred label only needs its
+container to be centred within the button, which it is, so it is indifferent to
+the whole question. It also happens to be what Besiege does with its own button
+labels.
+
+### Whether a prefab's label is the prefab
+
+`Text Button`'s label is a child, authored at a fixed width for the prefab's own
+size, so it has to be stretched to whatever you resized the control to. `Text`'s
+label **is** the prefab — and stretching that throws away wherever you just
+placed it. Same call, opposite treatment, and the failure is silent: the status
+line in this mod ended up anchored across the middle of the window, looking for
+all the world like a placement bug. Check whether the `Text` you found is on the
+root before touching its rect.
+
+## Knowing when the game has a menu up
+
+`StatMaster.inMenu` is a public static bool property, and `StatMaster.hudHidden`
+a public static field for the player having hidden the interface. There is a
+`StatMaster.inMenuChanged` Action beside it, but it is a plain static, so
+subscribing means remembering to unsubscribe, and getting that wrong leaves a
+destroyed object being called into; polling two statics per frame beats being
+wrong about that.
+
+Anything drawn over the build area should check them. Besiege's own block mapper
+steps aside when a menu opens rather than floating over it, and a mod panel that
+does not looks broken by comparison. Keep the player's own open/closed answer
+separate from the suppression, or a menu opening and closing undoes a panel they
+had deliberately hidden.
+
+`StatMaster` is not in the stable `Modding` namespace, so guard the read and let
+a failure mean "no menu": a panel that fails to hide is a great deal better than
+one that never appears.
 
 ## Reading a .bsg without being allowed to read files
 

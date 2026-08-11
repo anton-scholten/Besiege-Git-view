@@ -126,6 +126,66 @@ namespace GitView
                                                 rect.anchoredPosition.y - amount * rect.pivot.y);
         }
 
+        /// <summary>Takes a strip off the bottom of a rect. See <see cref="InsetTop"/>.</summary>
+        public static void InsetBottom(RectTransform rect, float amount)
+        {
+            if (rect == null || amount == 0f)
+            {
+                return;
+            }
+            if (rect.anchorMin.y != rect.anchorMax.y)
+            {
+                rect.offsetMin = new Vector2(rect.offsetMin.x, rect.offsetMin.y + amount);
+                return;
+            }
+            rect.sizeDelta = new Vector2(rect.sizeDelta.x, rect.sizeDelta.y - amount);
+            rect.anchoredPosition = new Vector2(rect.anchoredPosition.x,
+                                                rect.anchoredPosition.y + amount * (1f - rect.pivot.y));
+        }
+
+        /// <summary>
+        /// Puts a rect immediately above or below another one, matching its width.
+        ///
+        /// Measured rather than derived. The obvious approach — anchor the strip to
+        /// the same edge of the window and step by a known height — assumes the
+        /// window's own rect is the box you can see, and for a prefab it need not
+        /// be: the frame can be a child, inset inside a larger root, and the
+        /// scrolling area inset again inside that for its scrollbar. Anything
+        /// placed by arithmetic then lands somewhere unrelated, and anything sized
+        /// by arithmetic ends up a scrollbar's width out of step with the rows it
+        /// is a heading for.
+        ///
+        /// <c>CalculateRelativeRectTransformBounds</c> asks where the box actually
+        /// is, in the coordinates of the thing we are parenting to, which is true
+        /// whatever the prefab's internal layout turns out to be.
+        /// </summary>
+        public static void PlaceStrip(RectTransform strip, RectTransform against,
+                                      RectTransform space, float height, bool above)
+        {
+            if (strip == null || against == null || space == null)
+            {
+                return;
+            }
+
+            // Rects are only correct once a layout pass has run over them, and the
+            // caller has just resized things.
+            Canvas.ForceUpdateCanvases();
+
+            Bounds box = RectTransformUtility.CalculateRelativeRectTransformBounds(space, against);
+            strip.anchorMin = new Vector2(0.5f, 0.5f);
+            strip.anchorMax = new Vector2(0.5f, 0.5f);
+            strip.pivot = new Vector2(0.5f, 0.5f);
+            strip.sizeDelta = new Vector2(box.size.x, height);
+
+            float edge = above ? box.center.y + box.extents.y + height * 0.5f
+                               : box.center.y - box.extents.y - height * 0.5f;
+            // The bounds are in the parent's local space, whose origin is its
+            // pivot; anchoredPosition is measured from the anchor, which is the
+            // centre of the parent's rect. Those coincide only when the parent is
+            // pivoted in its middle, which is not ours to assume.
+            strip.anchoredPosition = new Vector2(box.center.x, edge) - space.rect.center;
+        }
+
         public static Text AddText(Transform parent, string name, int fontSize,
                                    TextAnchor alignment)
         {

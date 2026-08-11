@@ -32,26 +32,60 @@ namespace GitView
     public class HistoryView : MonoBehaviour
     {
         private const int CanvasOrder = 29000;
-        private const float WindowWidth = 700f;
+        private const float WindowWidth = 720f;
         private const float WindowHeight = 560f;
         private const float RowHeight = 66f;
         private const float HeaderHeight = 34f;
-        private const int RowFontSize = 15;
-        private const int HeaderFontSize = 14;
+        private const float StatusHeight = 26f;
 
-        // Column edges as fractions of the row's width. One table, used by both the
-        // header and every row, so the two can never drift apart.
-        private const float ThumbEnd = 0.145f;
-        private const float StampEnd = 0.565f;
-        private const float AddedEnd = 0.710f;
-        private const float ChangedEnd = 0.855f;
+        /// <summary>How far the status line sits above the window's bottom edge.</summary>
+        private const float StatusMargin = 10f;
+        private const int RowFontSize = 15;
+        private const int HeaderFontSize = 13;
+
+        // Column edges as fractions of the row's width, and the padding inside
+        // one. One table, used by both the header and every row, so a heading and
+        // the values under it cannot drift apart.
+        private const float ThumbEnd = 0.105f;
+        private const float ThumbInset = 5f;
+        private const float StampEnd = 0.460f;
+        private const float AddedEnd = 0.640f;
+        private const float ChangedEnd = 0.820f;
+        private const float PadLeft = 9f;
+        private const float PadRight = 13f;
+
+        // What turns a banded table into a stack of Besiege buttons: a margin
+        // either side of a row and a gap between one row and the next.
+        private const float RowMargin = 8f;
+        private const float RowGap = 6f;
+        private const float HeaderGap = 3f;
 
         private static readonly Color AddedInk = new Color(0.31f, 0.85f, 0.42f, 1f);
         private static readonly Color ChangedInk = new Color(1f, 0.66f, 0.16f, 1f);
         private static readonly Color RemovedInk = new Color(0.96f, 0.35f, 0.36f, 1f);
         private static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
-        private static readonly Color SelectedTint = new Color(1f, 1f, 1f, 0.16f);
         private static readonly Color ClearTint = new Color(1f, 1f, 1f, 0f);
+
+        /// <summary>
+        /// The colour Besiege marks a chosen thing with -- the red on the block
+        /// panel's selected option. Taken from UI Factory's copy of the game's
+        /// palette rather than sampled off a screenshot, with the same value
+        /// written out as a fallback in case that class ever moves.
+        /// </summary>
+        private static Color SelectedFill
+        {
+            get
+            {
+                try
+                {
+                    return Besiege.UI.Consts.C_BG_RED;
+                }
+                catch (Exception)
+                {
+                    return new Color(0.92f, 0.13f, 0.29f, 1f);
+                }
+            }
+        }
 
         private readonly List<HistoryRow> _rows = new List<HistoryRow>();
         private readonly GhostView _ghosts = new GhostView();
@@ -71,10 +105,16 @@ namespace GitView
         private bool _built;
         private bool _counting;
 
-        /// <summary>Whether the window is on screen.</summary>
+        /// <summary>
+        /// Whether the player has the window open -- which is not the same as
+        /// whether it is on screen, since it steps aside while a menu is up.
+        /// </summary>
+        private bool _wanted;
+        private bool _saidWaiting;
+
         public bool Visible
         {
-            get { return _window != null && _window.activeSelf; }
+            get { return _wanted; }
         }
 
         public bool HasHistory
@@ -129,16 +169,77 @@ namespace GitView
                             "load screen.");
                 return;
             }
-            SetVisible(!_window.activeSelf);
+            SetVisible(!_wanted);
         }
 
+        /// <summary>Opens or closes the window, as the player asked.</summary>
         public void SetVisible(bool visible)
         {
-            if (_window != null)
+            _wanted = visible;
+            Apply();
+        }
+
+        /// <summary>
+        /// Shows the window when the player wants it and the game is not busy
+        /// showing something of its own.
+        ///
+        /// This is how Besiege's own block mapper behaves: open a menu over the
+        /// build area — escape, load, options — and the panel goes away rather than
+        /// floating over the top of it, and comes back when the menu does. The
+        /// overlay in the world goes with it, because a machine covered in red
+        /// ghosts is not what you want to be looking at while picking a different
+        /// machine to load.
+        ///
+        /// The player's own answer is kept separately in <c>_wanted</c>, so a menu
+        /// opening and closing does not undo a window they had deliberately hidden.
+        /// </summary>
+        private void Apply()
+        {
+            bool showing = _wanted && !GameIsBusy();
+            if (_window != null && _window.activeSelf != showing)
             {
-                _window.SetActive(visible);
+                _window.SetActive(showing);
             }
-            _ghosts.SetVisible(visible);
+            _ghosts.SetVisible(showing);
+
+            if (_wanted && !showing && !_saidWaiting)
+            {
+                // Said once, because a window that is open and invisible is
+                // otherwise indistinguishable from one that failed to build.
+                _saidWaiting = true;
+                Log.Info("the history window is waiting for the game's own menu to close.");
+            }
+        }
+
+        /// <summary>
+        /// True while the game has a menu up or the player has hidden the HUD.
+        ///
+        /// <c>StatMaster</c> is not part of the stable Modding namespace and can
+        /// change without notice, so a failure here means "not busy" -- a window
+        /// that fails to hide is a great deal better than one that never appears.
+        /// </summary>
+        private static bool GameIsBusy()
+        {
+            try
+            {
+                return StatMaster.inMenu || StatMaster.hudHidden;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private void Update()
+        {
+            // Polled rather than driven off StatMaster.inMenuChanged: that is a
+            // plain static Action, so subscribing to it means remembering to
+            // unsubscribe, and getting that wrong leaves a destroyed window being
+            // called into. Two static reads a frame is not worth the risk.
+            if (_built)
+            {
+                Apply();
+            }
         }
 
         private void BuildAndFill()
@@ -250,6 +351,8 @@ namespace GitView
                 : _scroll.transform as RectTransform;
 
             UIBuild.InsetTop(_scroll.transform as RectTransform, HeaderHeight);
+            UIBuild.InsetBottom(_scroll.transform as RectTransform,
+                                StatusHeight + StatusMargin);
 
             _content.anchorMin = new Vector2(0f, 1f);
             _content.anchorMax = new Vector2(1f, 1f);
@@ -264,58 +367,68 @@ namespace GitView
         /// <summary>
         /// The column headings, in the strip the scroll view has just given up.
         ///
-        /// Placed against the window's own top edge, below the title bar, rather
-        /// than against the scroll view: the prefab's scroll view is stretched
-        /// inside the window, and a stretched rect's anchoredPosition and sizeDelta
-        /// are offsets from its anchors rather than a place and a size, so copying
-        /// them puts the header somewhere unrelated.
+        /// Placed by measuring the scrolling area rather than by anchoring to the
+        /// window: what the rows are laid out across is the scroll view's viewport,
+        /// which is inset inside the window by however much the prefab's frame and
+        /// scrollbar take. A heading anchored to the window is that much wider than
+        /// the rows beneath it, and every column drifts by a share of the
+        /// difference — which is exactly what it looked like.
         /// </summary>
         private void BuildHeader()
         {
             RectTransform rect = UIBuild.CreateRect("Header", _window.transform);
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.sizeDelta = new Vector2(0f, HeaderHeight);
-            rect.anchoredPosition = new Vector2(0f, -TopBarHeight());
+            UIBuild.PlaceStrip(rect, _viewport, _window.transform as RectTransform,
+                               HeaderHeight, true);
+            // The rows sit inside their own margin, so their columns are fractions
+            // of a narrower box than the viewport. The header has to lose the same
+            // margin or every heading sits a few pixels left of its column.
+            rect.sizeDelta = new Vector2(rect.sizeDelta.x - RowMargin * 2f, HeaderHeight);
 
-            _headers[RowSort.ByTime] = HeaderButton(rect, RowSort.ByTime, ThumbEnd, StampEnd,
-                                                    TextAnchor.MiddleLeft);
-            _headers[RowSort.ByAdded] = HeaderButton(rect, RowSort.ByAdded, StampEnd, AddedEnd,
-                                                     TextAnchor.MiddleRight);
+            _headers[RowSort.ByTime] = HeaderButton(rect, RowSort.ByTime, ThumbEnd, StampEnd);
+            _headers[RowSort.ByAdded] = HeaderButton(rect, RowSort.ByAdded, StampEnd, AddedEnd);
             _headers[RowSort.ByChanged] = HeaderButton(rect, RowSort.ByChanged, AddedEnd,
-                                                       ChangedEnd, TextAnchor.MiddleRight);
-            _headers[RowSort.ByRemoved] = HeaderButton(rect, RowSort.ByRemoved, ChangedEnd, 1f,
-                                                       TextAnchor.MiddleRight);
+                                                       ChangedEnd);
+            _headers[RowSort.ByRemoved] = HeaderButton(rect, RowSort.ByRemoved, ChangedEnd, 1f);
         }
 
         /// <summary>
-        /// How tall the window's title bar is, measured rather than assumed --
-        /// UI Factory authors it at 50, but that is its number to change.
+        /// One clickable column heading, centred in its column above centred
+        /// values.
+        ///
+        /// Centred rather than pushed to the column's edge, and not only because
+        /// Besiege centres the labels on its own panel buttons. An edge-aligned
+        /// label has to be inset from that edge by exactly what the values below it
+        /// are inset by, and that inset cannot be applied reliably: UIFactory's
+        /// button keeps its label somewhere down a hierarchy of its own, so
+        /// stretching "the label" insets it inside whatever container it happens to
+        /// sit in rather than inside the button. The heading came out twenty pixels
+        /// off its column and no arithmetic here could say why. A centred label is
+        /// indifferent to all of it -- it only needs its container to be centred in
+        /// the button, which it is.
         /// </summary>
-        private float TopBarHeight()
-        {
-            Transform bar = _window.transform.FindChild("TopBar");
-            RectTransform rect = bar == null ? null : bar as RectTransform;
-            return rect == null ? 50f : rect.rect.height;
-        }
-
-        private Text HeaderButton(RectTransform parent, int column, float from, float to,
-                                  TextAnchor alignment)
+        private Text HeaderButton(RectTransform parent, int column, float from, float to)
         {
             GameObject button = UIF.Spawn(UIF.ButtonPrefab, parent);
             if (button == null)
             {
                 return null;
             }
-            UIF.Span(UIF.Rect(button), from, to, 6f, 6f);
+            // Gapped like the rows, so the headings read as the same family of
+            // buttons rather than as one bar chopped into pieces.
+            UIF.Span(UIF.Rect(button), from, to, HeaderGap, HeaderGap);
+
             Text label = UIF.Caption(button, RowSort.ColumnName(column), HeaderFontSize,
-                                     alignment);
+                                     TextAnchor.MiddleCenter);
             if (label != null)
             {
                 label.color = QuietInk;
-                UIF.Stretch(label.rectTransform, 6f, 0f);
+                UIF.StretchInset(label.rectTransform, 0f, 0f, 0f);
             }
+
+            // Left pivoted in the middle, so the hover swell grows evenly either
+            // side and a centred label stays where it is.
+            UIF.PivotAnimation(button, 0.5f);
+
             int captured = column;
             UIF.OnClick(button, delegate { SortBy(captured); });
             return label;
@@ -328,17 +441,24 @@ namespace GitView
             {
                 return;
             }
+            // Anchored inside the window's own bottom edge rather than measured off
+            // the scrolling area the way the header is. The viewport reaches the
+            // bottom of the frame, so "just below the viewport" is just below the
+            // window -- which is where this line ended up, floating on the scenery
+            // under it.
             RectTransform rect = UIF.Rect(text);
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
             rect.pivot = new Vector2(0.5f, 0f);
-            rect.sizeDelta = new Vector2(0f, 26f);
-            rect.anchoredPosition = new Vector2(0f, 4f);
-            _status = UIF.Caption(text, "", 13, TextAnchor.MiddleCenter);
+            rect.sizeDelta = new Vector2(-(RowMargin + PadLeft) * 2f, StatusHeight);
+            rect.anchoredPosition = new Vector2(0f, StatusMargin);
+            // Note UIF.Label, not Caption-and-stretch: on the Text prefab the label
+            // is the prefab, and stretching it would undo the placement above.
+            _status = UIF.Label(text, 13, TextAnchor.MiddleCenter);
             if (_status != null)
             {
                 _status.color = QuietInk;
-                UIF.Stretch(_status.rectTransform, 12f, 0f);
+                _status.text = string.Empty;
             }
         }
 
@@ -383,12 +503,17 @@ namespace GitView
                 return row;
             }
 
+            // Inset and gapped rather than edge to edge, so the rows read as the
+            // stack of separate buttons Besiege's own panels are made of instead of
+            // as one banded table.
             row.Rect = UIF.Rect(row.Root);
             row.Rect.anchorMin = new Vector2(0f, 1f);
             row.Rect.anchorMax = new Vector2(1f, 1f);
             row.Rect.pivot = new Vector2(0.5f, 1f);
-            row.Rect.sizeDelta = new Vector2(0f, RowHeight - 2f);
-            UIF.PivotAnimationLeft(row.Root);
+            row.Rect.sizeDelta = new Vector2(-RowMargin * 2f, RowHeight - RowGap);
+            // Pivoted in the middle: everything in a row is centred in its column,
+            // so a swell that grows evenly either side leaves it all where it is.
+            UIF.PivotAnimation(row.Root, 0.5f);
 
             // The prefab's own label is in the way of the columns, but destroying it
             // is not safe -- other UIFactory behaviours write to it -- so it is
@@ -404,30 +529,61 @@ namespace GitView
             row.Highlight.raycastTarget = false;
             row.Highlight.transform.SetAsFirstSibling();
 
+            // Square, and sized in pixels rather than as a fraction of the row:
+            // Besiege's autosave thumbnails are 512x512, and stretching one to fill
+            // a column that is wider than the row is tall visibly squashes it.
             row.Thumbnail = UIBuild.AddRawImage(row.Rect, "Thumb");
-            UIF.Span(row.Thumbnail.rectTransform, 0f, ThumbEnd, 8f, 6f);
+            RectTransform thumb = row.Thumbnail.rectTransform;
+            thumb.anchorMin = new Vector2(0f, 0f);
+            thumb.anchorMax = new Vector2(0f, 1f);
+            thumb.pivot = new Vector2(0f, 0.5f);
+            thumb.offsetMin = new Vector2(PadLeft, ThumbInset);
+            thumb.offsetMax = new Vector2(PadLeft + RowHeight - ThumbInset * 2f - 2f,
+                                          -ThumbInset);
             row.Thumbnail.raycastTarget = false;
 
-            row.Stamp = UIBuild.AddText(row.Rect, "Stamp", RowFontSize, TextAnchor.MiddleLeft);
-            UIF.Span(row.Stamp.rectTransform, ThumbEnd, StampEnd, 8f, 6f);
-
-            row.Added = UIBuild.AddText(row.Rect, "Added", RowFontSize, TextAnchor.MiddleRight);
-            UIF.Span(row.Added.rectTransform, StampEnd, AddedEnd, 6f, 12f);
-            row.Added.color = AddedInk;
-
-            row.Changed = UIBuild.AddText(row.Rect, "Changed", RowFontSize,
-                                          TextAnchor.MiddleRight);
-            UIF.Span(row.Changed.rectTransform, AddedEnd, ChangedEnd, 6f, 12f);
-            row.Changed.color = ChangedInk;
-
-            row.Removed = UIBuild.AddText(row.Rect, "Removed", RowFontSize,
-                                          TextAnchor.MiddleRight);
-            UIF.Span(row.Removed.rectTransform, ChangedEnd, 1f, 6f, 12f);
-            row.Removed.color = RemovedInk;
+            // Every column below is inset exactly as its heading is, so the two
+            // line up whatever the window is resized to.
+            // Centred, under centred headings. See HeaderButton for why the columns
+            // are aligned this way rather than to their edges.
+            row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd);
+            row.Added = Cell(row.Rect, "Added", StampEnd, AddedEnd);
+            row.Changed = Cell(row.Rect, "Changed", AddedEnd, ChangedEnd);
+            row.Removed = Cell(row.Rect, "Removed", ChangedEnd, 1f);
 
             HistoryRow captured = row;
             UIF.OnClick(row.Root, delegate { Choose(captured); });
             return row;
+        }
+
+        /// <summary>
+        /// One column's label, spawned from UI Factory's Text prefab rather than
+        /// built out of a bare uGUI Text.
+        ///
+        /// The prefab brings Besiege's font and its letter spacing with it, which
+        /// is most of what makes a panel look like the game's rather than like a
+        /// mod's. Falls back to a plain label if UIFactory cannot supply one, so a
+        /// row is never simply missing.
+        /// </summary>
+        private static Text Cell(RectTransform row, string name, float from, float to)
+        {
+            GameObject spawned = UIF.Spawn(UIF.TextPrefab, row);
+            if (spawned == null)
+            {
+                Text plain = UIBuild.AddText(row, name, RowFontSize, TextAnchor.MiddleCenter);
+                UIF.Span(plain.rectTransform, from, to, PadLeft, PadRight);
+                return plain;
+            }
+
+            spawned.name = name;
+            UIF.Span(UIF.Rect(spawned), from, to, PadLeft, PadRight);
+            Text label = UIF.Label(spawned, RowFontSize, TextAnchor.MiddleCenter);
+            if (label != null)
+            {
+                label.raycastTarget = false;
+                label.text = string.Empty;
+            }
+            return label;
         }
 
         private void Bind(HistoryRow row, VersionEntry entry, int index)
@@ -438,19 +594,46 @@ namespace GitView
             }
             row.Entry = entry;
             row.Rect.anchoredPosition = new Vector2(0f, -index * RowHeight);
-            row.Stamp.text = entry.Stamp() + (entry.Manual ? "    SAVED" : string.Empty);
-            row.Stamp.color = entry.Manual ? Color.white : QuietInk;
-            row.Highlight.color = index == _selected ? SelectedTint : ClearTint;
-            BindCounts(row, entry);
+            Repaint(row, entry, index == _selected);
         }
 
-        private static void BindCounts(HistoryRow row, VersionEntry entry)
+        /// <summary>
+        /// Colours a row for what it is and whether it is the one being shown.
+        ///
+        /// A chosen row goes solid red with white text throughout, which is what
+        /// Besiege does to the selected option on a block's panel. The count
+        /// colours are given up on that one row deliberately: green on red is not
+        /// worth reading, and the same three numbers are spelled out along the
+        /// bottom of the window anyway.
+        /// </summary>
+        private static void Repaint(HistoryRow row, VersionEntry entry, bool chosen)
         {
+            row.Highlight.color = chosen ? SelectedFill : ClearTint;
+            row.Stamp.text = entry.Stamp() + (entry.Manual ? "    SAVED" : string.Empty);
+            row.Stamp.color = chosen || entry.Manual ? Color.white : QuietInk;
+            BindCounts(row, entry, chosen);
+        }
+
+        private void Restyle()
+        {
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                if (_rows[i].Entry != null)
+                {
+                    Repaint(_rows[i], _rows[i].Entry, i == _selected);
+                }
+            }
+        }
+
+        private static void BindCounts(HistoryRow row, VersionEntry entry, bool chosen)
+        {
+            Color quiet = chosen ? Color.white : QuietInk;
             if (entry.IsFirst)
             {
                 // Nothing before it to be a change from. Its block count is the more
                 // useful thing to show in the same space.
                 row.Added.text = entry.Counted ? entry.BlockCount + " BLOCKS" : "";
+                row.Added.color = quiet;
                 row.Changed.text = string.Empty;
                 row.Removed.text = string.Empty;
                 return;
@@ -460,13 +643,35 @@ namespace GitView
                 row.Added.text = "·";
                 row.Changed.text = "·";
                 row.Removed.text = "·";
+                row.Added.color = quiet;
+                row.Changed.color = quiet;
+                row.Removed.color = quiet;
                 return;
             }
-            row.Added.text = entry.Added == 0 ? "-" : "+" + entry.Added;
-            row.Changed.text = entry.Changed == 0 ? "-" : "~" + entry.Changed;
-            row.Removed.text = entry.Removed == 0 ? "-" : "-" + entry.Removed;
+
+            // A zero is written as a dash in the quiet ink rather than in the
+            // column's own colour, so "nothing removed" cannot be misread at a
+            // glance as a count with a minus sign in front of it.
+            Fill(row.Added, entry.Added, "+", chosen ? Color.white : AddedInk, quiet);
+            Fill(row.Changed, entry.Changed, "~", chosen ? Color.white : ChangedInk, quiet);
+            Fill(row.Removed, entry.Removed, "-", chosen ? Color.white : RemovedInk, quiet);
         }
 
+        private static void Fill(Text cell, int count, string sign, Color ink, Color quiet)
+        {
+            cell.text = count == 0 ? "–" : sign + count;
+            cell.color = count == 0 ? quiet : ink;
+        }
+
+        /// <summary>
+        /// Marks every heading with both arrows, the one that is in force lit and
+        /// the other dimmed.
+        ///
+        /// Showing a single arrow on the sorted column only says which column is
+        /// sorted; it does not say what clicking the others would do, or that
+        /// clicking this one again would reverse it. A pair on every column says
+        /// all three at once.
+        /// </summary>
         private void UpdateHeaderMarks()
         {
             for (int column = 0; column < _headers.Length; column++)
@@ -475,11 +680,22 @@ namespace GitView
                 {
                     continue;
                 }
-                string mark = column != _sortColumn ? string.Empty
-                                                    : (_ascending ? "  ▲" : "  ▼");
-                _headers[column].text = RowSort.ColumnName(column) + mark;
-                _headers[column].color = column == _sortColumn ? Color.white : QuietInk;
+                bool sorted = column == _sortColumn;
+                _headers[column].text = RowSort.ColumnName(column) + "  " +
+                                        Arrow("▲", sorted && _ascending) +
+                                        Arrow("▼", sorted && !_ascending);
+                _headers[column].color = sorted ? Color.white : QuietInk;
             }
+        }
+
+        /// <summary>
+        /// One arrow, lit or dimmed. The colour has to be markup rather than the
+        /// label's own: both arrows live in the same label as the heading, and only
+        /// one of them is ever in force.
+        /// </summary>
+        private static string Arrow(string glyph, bool lit)
+        {
+            return (lit ? "<color=#FFFFFFFF>" : "<color=#FFFFFF33>") + glyph + "</color>";
         }
 
         private void SortBy(int column)
@@ -514,13 +730,7 @@ namespace GitView
                 return;
             }
             _selected = _versions.IndexOf(entry);
-            for (int i = 0; i < _rows.Count; i++)
-            {
-                if (_rows[i].Highlight != null)
-                {
-                    _rows[i].Highlight.color = i == _selected ? SelectedTint : ClearTint;
-                }
-            }
+            Restyle();
             StartCoroutine(LoadAndShow(entry));
         }
 
@@ -659,7 +869,7 @@ namespace GitView
                 {
                     if (_rows[r].Entry == entry)
                     {
-                        BindCounts(_rows[r], entry);
+                        BindCounts(_rows[r], entry, r == _selected);
                     }
                 }
             }

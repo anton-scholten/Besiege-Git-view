@@ -103,9 +103,13 @@ namespace GitView
             }
         }
 
+        /// <summary>
+        /// Shows or hides the overlay. Idempotent, because the window asks every
+        /// frame whether the game has a menu up and this is the answer it acts on.
+        /// </summary>
         public void SetVisible(bool visible)
         {
-            if (_container != null)
+            if (_container != null && _container.activeSelf != visible)
             {
                 _container.SetActive(visible);
             }

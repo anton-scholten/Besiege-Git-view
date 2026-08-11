@@ -136,6 +136,29 @@ namespace GitView
         }
 
         /// <summary>
+        /// Fills the parent with a different inset on each side.
+        ///
+        /// Separate from <see cref="Stretch"/> because a column heading and the
+        /// values under it have to be inset by exactly the same amounts on exactly
+        /// the same sides, and those amounts are not symmetrical -- text is padded
+        /// away from the column edge it is aligned to by more than the edge it is
+        /// not.
+        /// </summary>
+        public static void StretchInset(RectTransform rect, float left, float right,
+                                        float vertical)
+        {
+            if (rect == null)
+            {
+                return;
+            }
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.offsetMin = new Vector2(left, vertical);
+            rect.offsetMax = new Vector2(-right, -vertical);
+        }
+
+        /// <summary>
         /// Sets the caption on a UIFactory prefab. Their text lives on a child, and
         /// carries a Translator that would overwrite whatever we assign the next
         /// time the language changes -- so that gets removed for text we own.
@@ -183,6 +206,41 @@ namespace GitView
             }
             label.alignment = alignment;
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            // The sort arrows are two glyphs in one label, one lit and one dimmed,
+            // which needs markup.
+            label.supportRichText = true;
+            return label;
+        }
+
+        /// <summary>
+        /// Finds and styles the label on a spawned UIFactory prefab, leaving the
+        /// prefab's own rect where the caller put it.
+        ///
+        /// The distinction matters and is easy to get wrong. On a `Text Button` the
+        /// label is a child, authored at a fixed width for the prefab's own size,
+        /// so it has to be stretched to whatever the control was resized to. On a
+        /// `Text` the label *is* the prefab, and stretching it throws away the
+        /// placement the caller just worked out -- which is how the status line
+        /// ended up anchored across the middle of the window instead of under it.
+        /// </summary>
+        public static Text Label(GameObject go, int fontSize, TextAnchor alignment)
+        {
+            if (go == null)
+            {
+                return null;
+            }
+            Text label = go.GetComponent<Text>();
+            if (label == null)
+            {
+                label = go.GetComponentInChildren<Text>(true);
+            }
+            Style(label, fontSize, alignment);
+
+            RectTransform own = go.transform as RectTransform;
+            if (label != null && label.rectTransform != own)
+            {
+                StretchInset(label.rectTransform, 0f, 0f, 0f);
+            }
             return label;
         }
 
@@ -204,15 +262,19 @@ namespace GitView
         }
 
         /// <summary>
-        /// Moves a control's press animation to grow from its left edge instead of
-        /// its middle.
+        /// Moves the edge a control's hover animation grows from.
         ///
-        /// UIFactory's buttons scale about their pivot on hover. On a button as
-        /// wide as a whole row that carries its left-aligned text visibly sideways,
-        /// which reads as the text jumping rather than as the row lighting up.
-        /// Moving the pivot moves the rect, so the insets are put back afterwards.
+        /// UIFactory's buttons swell about their pivot when the pointer is over
+        /// them, and they are pivoted in the middle. On a control as wide as a
+        /// whole row that carries its text visibly sideways — a left-aligned label
+        /// slides left, a right-aligned one slides right — which reads as the text
+        /// jumping rather than as the row lighting up. Pinning the pivot to the
+        /// edge the text is aligned to keeps that edge still, so the swell happens
+        /// entirely on the other side and the words do not move.
+        ///
+        /// Moving a pivot moves the rect, so the insets are put back afterwards.
         /// </summary>
-        public static void PivotAnimationLeft(GameObject control)
+        public static void PivotAnimation(GameObject control, float pivotX)
         {
             if (control == null)
             {
@@ -234,7 +296,7 @@ namespace GitView
                 }
                 Vector2 min = rect.offsetMin;
                 Vector2 max = rect.offsetMax;
-                rect.pivot = new Vector2(0f, 0.5f);
+                rect.pivot = new Vector2(pivotX, 0.5f);
                 rect.offsetMin = min;
                 rect.offsetMax = max;
             }
@@ -243,5 +305,6 @@ namespace GitView
                 // Not worth a log line; the animation simply stays as authored.
             }
         }
+
     }
 }

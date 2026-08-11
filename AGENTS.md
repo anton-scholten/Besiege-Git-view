@@ -104,23 +104,44 @@ place.
 parsing and the sorting. The mod compiles under Besiege's own compiler and
 references nothing the loader forbids.
 
-**Runtime behaviour has not been confirmed in game.** Nothing here has been run
-inside Besiege. The parts most worth watching on a first run:
+**Confirmed in game** on one run: the mod loads, the compare button appears on
+slots with history, pressing it closes the browser and loads the newest version,
+the window opens with thumbnails and counts, the counting coroutine fills the
+rows, and the overlay draws (`Particles/Alpha Blended` is the shader it found).
+`Machine.IsLoadingMachine` was enough of a wait, and retargeting the Window
+prefab's scroll view worked.
 
-- **where the compare button lands.** The placement is derived from the spacing
-  of a slot's existing buttons, which has not been seen. `BrowserWatch` logs the
-  button count and the position it chose, once, at Info level — read that first
-  if the button is somewhere silly, and adjust `StepFactor` or the anchor it
-  steps from.
-- **whether the ghost prefabs take a colour.** `GhostView` replaces their
-  materials with one built from the first transparent shader it can find, and
-  logs which. If no candidate shader is in the build it falls back to tinting
-  Besiege's own ghost material, which may ignore the tint — in which case added,
-  changed and removed would all look the same, and the shader list is where to
-  look.
-- **whether `Machine.IsLoadingMachine` is enough of a wait** before the overlay is
-  drawn over freshly rebuilt blocks.
-- **whether the Window prefab's scroll view survives being retargeted** the way
-  `FindScrollView` does, and whether the header lands above it.
+Three things that run found, all since fixed:
+
+- **Repainting a copied slot button took four attempts**, three of them silent
+  failures: `material.mainTexture` (Besiege's shader need not sample `_MainTex`);
+  a quad of our own parented to the face (invisible); and assigning a material to
+  the button's own renderer, which found no renderer at all — because **a clone
+  has no face in the frame it is cloned**, whatever builds it running in an Awake
+  of its own. `Paint` now retries across sweeps and handles every kind of
+  renderer, which is how the answer finally arrived: **a slot button's face is a
+  `SpriteRenderer`**, so the thing to set is its `sprite`, sized against the one
+  it replaces (see `IconSprite`). The material and quad paths stay as the
+  fallback for buttons that are not sprites.
+- **The placement heuristic was wrong, twice.** It stepped one "pitch" left of
+  the leftmost button, where pitch was the smallest gap between any two — and a
+  slot has nine buttons, eight of them inactive, two 0.018 apart. Only one is
+  ever on show, so the place is its mirror through the middle of the slot.
+- **The header and the status line were anchored to the window**, which is wider
+  than the scrolling area the rows are laid out across, so every column drifted.
+  Both are now placed by measuring the viewport (`UIBuild.PlaceStrip`).
+- **The status line was then placed correctly and immediately un-placed**, by
+  stretching its label to fill its parent — which works on a `Text Button`, whose
+  label is a child, and destroys a `Text`, which *is* the label. `UIF.Label`
+  encodes the distinction so it only has to be got right once.
+
+Still not confirmed:
+
+- **whether the branch glyph reads at button size**, and which of `Paint`'s
+  routes got it there. `BrowserWatch` logs the button's renderers once, with
+  their kind, mesh size and readability, and says separately if it fell back to a
+  quad of its own — read that first if the icon is still wrong.
+- **whether a machine *file* slot** (rather than an AutoSave folder) shows more
+  than one button, which would change where ours goes. The same log line says.
 
 Errors appear in `Player.log`, and in the in-game console with `show_logs true`.
