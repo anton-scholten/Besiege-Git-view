@@ -17,6 +17,7 @@ namespace GitView
         public Text Changed;
         public Text Removed;
         public Image Highlight;
+        public Button Button;
         public VersionEntry Entry;
         public bool ThumbnailLoaded;
     }
@@ -60,11 +61,18 @@ namespace GitView
         private const float RowGap = 6f;
         private const float HeaderGap = 3f;
 
-        private static readonly Color AddedInk = new Color(0.31f, 0.85f, 0.42f, 1f);
-        private static readonly Color ChangedInk = new Color(1f, 0.66f, 0.16f, 1f);
-        private static readonly Color RemovedInk = new Color(0.96f, 0.35f, 0.36f, 1f);
+        // The colour swatch that opens a column's picker, and the room it takes out
+        // of that column's heading.
+        private const float SwatchWidth = 24f;
+        private const float SwatchGap = 3f;
+
         private static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
         private static readonly Color ClearTint = new Color(1f, 1f, 1f, 0f);
+
+        // What a row does instead of swelling when the pointer is over it. See
+        // UIF.NoSwell for why a row cannot swell.
+        private static readonly Color HoverFill = new Color(1f, 1f, 1f, 0.10f);
+        private static readonly Color PressFill = new Color(1f, 1f, 1f, 0.18f);
 
         /// <summary>
         /// The colour Besiege marks a chosen thing with -- the red on the block
@@ -98,6 +106,8 @@ namespace GitView
         private RectTransform _viewport;
         private Text _status;
         private readonly Text[] _headers = new Text[RowSort.ColumnCount];
+        private readonly ColourPicker[] _pickers = new ColourPicker[DiffPalette.Categories];
+        private readonly Image[] _swatches = new Image[DiffPalette.Categories];
 
         private int _sortColumn = RowSort.ByTime;
         private bool _ascending;
@@ -389,6 +399,97 @@ namespace GitView
             _headers[RowSort.ByChanged] = HeaderButton(rect, RowSort.ByChanged, AddedEnd,
                                                        ChangedEnd);
             _headers[RowSort.ByRemoved] = HeaderButton(rect, RowSort.ByRemoved, ChangedEnd, 1f);
+
+            // Built after the headings so a swatch draws over the button it is
+            // notched into rather than under it.
+            Swatch(rect, CategoryOf(RowSort.ByAdded), StampEnd);
+            Swatch(rect, CategoryOf(RowSort.ByChanged), AddedEnd);
+            Swatch(rect, CategoryOf(RowSort.ByRemoved), ChangedEnd);
+        }
+
+        /// <summary>
+        /// The little block of colour at the left of a count column, which opens
+        /// that colour's picker.
+        ///
+        /// Beside the heading rather than in a settings panel of its own because
+        /// the colour has no meaning away from the column: it is what "+4" is
+        /// written in and what the blocks behind it are drawn in, and being able to
+        /// see all three at once is most of what makes them choosable.
+        /// </summary>
+        private void Swatch(RectTransform parent, int category, float columnStart)
+        {
+            GameObject button = UIF.Spawn(UIF.ButtonPrefab, parent);
+            if (button == null)
+            {
+                return;
+            }
+            button.name = "Swatch " + DiffPalette.Name(category);
+
+            RectTransform rect = UIF.Rect(button);
+            rect.anchorMin = new Vector2(columnStart, 0f);
+            rect.anchorMax = new Vector2(columnStart, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.offsetMin = new Vector2(HeaderGap, HeaderGap + 2f);
+            rect.offsetMax = new Vector2(HeaderGap + SwatchWidth, -(HeaderGap + 2f));
+
+            Text spare = button.GetComponentInChildren<Text>(true);
+            if (spare != null)
+            {
+                spare.text = string.Empty;
+            }
+
+            Image fill = UIBuild.AddImage(rect, "Fill", DiffPalette.Ink(category));
+            UIF.Stretch(fill.rectTransform, 4f, 4f);
+            fill.raycastTarget = false;
+            _swatches[category] = fill;
+
+            UIF.NoSwell(button);
+            int captured = category;
+            UIF.OnClick(button, delegate { TogglePicker(captured, rect); });
+        }
+
+        /// <summary>
+        /// Opens one picker and shuts the others. Two open at once would overlap --
+        /// they hang below headings a hundred pixels apart and are wider than that
+        /// -- and there is nothing to compare between them anyway.
+        /// </summary>
+        private void TogglePicker(int category, RectTransform under)
+        {
+            bool wasOpen = _pickers[category] != null && _pickers[category].Visible;
+            for (int i = 0; i < _pickers.Length; i++)
+            {
+                if (_pickers[i] != null)
+                {
+                    _pickers[i].Close();
+                }
+            }
+            if (wasOpen)
+            {
+                return;
+            }
+
+            if (_pickers[category] == null)
+            {
+                int captured = category;
+                _pickers[category] = new ColourPicker(captured, delegate { Recolour(captured); });
+            }
+            _pickers[category].Open(_window.transform, under,
+                                    _window.transform as RectTransform);
+        }
+
+        /// <summary>
+        /// Takes a colour the player has just changed through to everything drawn
+        /// in it: the counts in the list, the swatch on the heading, and the shells
+        /// over the machine.
+        /// </summary>
+        private void Recolour(int category)
+        {
+            if (_swatches[category] != null)
+            {
+                _swatches[category].color = DiffPalette.Ink(category);
+            }
+            Restyle();
+            _ghosts.Refresh();
         }
 
         /// <summary>
@@ -414,8 +515,13 @@ namespace GitView
                 return null;
             }
             // Gapped like the rows, so the headings read as the same family of
-            // buttons rather than as one bar chopped into pieces.
-            UIF.Span(UIF.Rect(button), from, to, HeaderGap, HeaderGap);
+            // buttons rather than as one bar chopped into pieces. The three count
+            // columns give up the width of a swatch on their left; the values under
+            // them stay centred in the whole column, which is what they are counts
+            // of -- the swatch belongs to the column, not to the heading.
+            float insetLeft = HasSwatch(column)
+                ? HeaderGap + SwatchWidth + SwatchGap : HeaderGap;
+            UIF.Span(UIF.Rect(button), from, to, insetLeft, HeaderGap);
 
             Text label = UIF.Caption(button, RowSort.ColumnName(column), HeaderFontSize,
                                      TextAnchor.MiddleCenter);
@@ -432,6 +538,21 @@ namespace GitView
             int captured = column;
             UIF.OnClick(button, delegate { SortBy(captured); });
             return label;
+        }
+
+        /// <summary>
+        /// True for the three columns that are a colour as well as a count. Their
+        /// sort order matches the palette's, one apart, since SAVED is a column and
+        /// not a category.
+        /// </summary>
+        private static bool HasSwatch(int column)
+        {
+            return column >= RowSort.ByAdded && column <= RowSort.ByRemoved;
+        }
+
+        private static int CategoryOf(int column)
+        {
+            return column - RowSort.ByAdded;
         }
 
         private void BuildStatusLine()
@@ -511,9 +632,10 @@ namespace GitView
             row.Rect.anchorMax = new Vector2(1f, 1f);
             row.Rect.pivot = new Vector2(0.5f, 1f);
             row.Rect.sizeDelta = new Vector2(-RowMargin * 2f, RowHeight - RowGap);
-            // Pivoted in the middle: everything in a row is centred in its column,
-            // so a swell that grows evenly either side leaves it all where it is.
-            UIF.PivotAnimation(row.Root, 0.5f);
+            // A row is far too wide to swell under the pointer without throwing its
+            // own text about; it lights up instead. Repaint wires that up, because
+            // what "lit" means depends on whether the row is the chosen one.
+            UIF.NoSwell(row.Root);
 
             // The prefab's own label is in the way of the columns, but destroying it
             // is not safe -- other UIFactory behaviours write to it -- so it is
@@ -524,7 +646,11 @@ namespace GitView
                 ownLabel.text = string.Empty;
             }
 
-            row.Highlight = UIBuild.AddImage(row.Rect, "Selected", ClearTint);
+            // Opaque white, and left that way. uGUI's colour transition multiplies
+            // the state's colour by the graphic's own, so an image that starts
+            // transparent stays invisible whatever it is told to become -- which is
+            // exactly how the selected row lost its red.
+            row.Highlight = UIBuild.AddImage(row.Rect, "Selected", Color.white);
             UIF.Stretch(row.Highlight.rectTransform, 0f, 0f);
             row.Highlight.raycastTarget = false;
             row.Highlight.transform.SetAsFirstSibling();
@@ -542,17 +668,22 @@ namespace GitView
                                           -ThumbInset);
             row.Thumbnail.raycastTarget = false;
 
-            // Every column below is inset exactly as its heading is, so the two
-            // line up whatever the window is resized to.
-            // Centred, under centred headings. See HeaderButton for why the columns
-            // are aligned this way rather than to their edges.
-            row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd);
-            row.Added = Cell(row.Rect, "Added", StampEnd, AddedEnd);
-            row.Changed = Cell(row.Rect, "Changed", AddedEnd, ChangedEnd);
-            row.Removed = Cell(row.Rect, "Removed", ChangedEnd, 1f);
+            // The counts are centred under centred headings -- see HeaderButton for
+            // why the headings are centred rather than aligned to their column's
+            // edge. The timestamps are the exception: they are all the same length
+            // and read as a list rather than as a column of figures, so they line
+            // up on the left, next to the thumbnails. Their heading stays centred
+            // over the column like the rest.
+            row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd, TextAnchor.MiddleLeft);
+            row.Added = Cell(row.Rect, "Added", StampEnd, AddedEnd, TextAnchor.MiddleCenter);
+            row.Changed = Cell(row.Rect, "Changed", AddedEnd, ChangedEnd,
+                               TextAnchor.MiddleCenter);
+            row.Removed = Cell(row.Rect, "Removed", ChangedEnd, 1f, TextAnchor.MiddleCenter);
 
             HistoryRow captured = row;
-            UIF.OnClick(row.Root, delegate { Choose(captured); });
+            row.Button = UIF.OnClick(row.Root, delegate { Choose(captured); });
+            // Before anything can see the white above.
+            Tint(row, false);
             return row;
         }
 
@@ -565,19 +696,20 @@ namespace GitView
         /// mod's. Falls back to a plain label if UIFactory cannot supply one, so a
         /// row is never simply missing.
         /// </summary>
-        private static Text Cell(RectTransform row, string name, float from, float to)
+        private static Text Cell(RectTransform row, string name, float from, float to,
+                                 TextAnchor alignment)
         {
             GameObject spawned = UIF.Spawn(UIF.TextPrefab, row);
             if (spawned == null)
             {
-                Text plain = UIBuild.AddText(row, name, RowFontSize, TextAnchor.MiddleCenter);
+                Text plain = UIBuild.AddText(row, name, RowFontSize, alignment);
                 UIF.Span(plain.rectTransform, from, to, PadLeft, PadRight);
                 return plain;
             }
 
             spawned.name = name;
             UIF.Span(UIF.Rect(spawned), from, to, PadLeft, PadRight);
-            Text label = UIF.Label(spawned, RowFontSize, TextAnchor.MiddleCenter);
+            Text label = UIF.Label(spawned, RowFontSize, alignment);
             if (label != null)
             {
                 label.raycastTarget = false;
@@ -600,18 +732,52 @@ namespace GitView
         /// <summary>
         /// Colours a row for what it is and whether it is the one being shown.
         ///
-        /// A chosen row goes solid red with white text throughout, which is what
-        /// Besiege does to the selected option on a block's panel. The count
-        /// colours are given up on that one row deliberately: green on red is not
-        /// worth reading, and the same three numbers are spelled out along the
-        /// bottom of the window anyway.
+        /// Only the background says which row is chosen. The text is the same on
+        /// every row -- the counts in their own colours, the timestamp quiet -- so
+        /// that a column means one thing all the way down and the chosen row is not
+        /// also the one row whose numbers are written differently from the rest.
+        ///
+        /// A manual save is marked by the word SAVED after its timestamp and by
+        /// nothing else. It used to be written in white as well, which made it look
+        /// selected.
         /// </summary>
         private static void Repaint(HistoryRow row, VersionEntry entry, bool chosen)
         {
-            row.Highlight.color = chosen ? SelectedFill : ClearTint;
+            Tint(row, chosen);
             row.Stamp.text = entry.Stamp() + (entry.Manual ? "    SAVED" : string.Empty);
-            row.Stamp.color = chosen || entry.Manual ? Color.white : QuietInk;
-            BindCounts(row, entry, chosen);
+            row.Stamp.color = QuietInk;
+            BindCounts(row, entry);
+        }
+
+        /// <summary>
+        /// Fills a row's background for the two things it has to say at once: this
+        /// is the version being shown, and the pointer is over this one.
+        ///
+        /// Driven through the button's own colour transition rather than by setting
+        /// the image, so hovering costs nothing per frame and Unity fades between
+        /// the states. The hover is a white veil over whatever is underneath, which
+        /// reads as a lift on an empty row and as a lighter red on the chosen one.
+        /// </summary>
+        private static void Tint(HistoryRow row, bool chosen)
+        {
+            Color fill = chosen ? SelectedFill : ClearTint;
+            if (row.Button == null)
+            {
+                row.Highlight.color = fill;
+                return;
+            }
+            UIF.HoverTint(row.Button, row.Highlight, fill,
+                          chosen ? Lighter(fill, 0.18f) : HoverFill,
+                          chosen ? Lighter(fill, 0.30f) : PressFill);
+        }
+
+        /// <summary>A colour with white mixed into it, its opacity untouched.</summary>
+        private static Color Lighter(Color colour, float amount)
+        {
+            return new Color(colour.r + (1f - colour.r) * amount,
+                             colour.g + (1f - colour.g) * amount,
+                             colour.b + (1f - colour.b) * amount,
+                             colour.a);
         }
 
         private void Restyle()
@@ -625,15 +791,14 @@ namespace GitView
             }
         }
 
-        private static void BindCounts(HistoryRow row, VersionEntry entry, bool chosen)
+        private static void BindCounts(HistoryRow row, VersionEntry entry)
         {
-            Color quiet = chosen ? Color.white : QuietInk;
             if (entry.IsFirst)
             {
                 // Nothing before it to be a change from. Its block count is the more
                 // useful thing to show in the same space.
                 row.Added.text = entry.Counted ? entry.BlockCount + " BLOCKS" : "";
-                row.Added.color = quiet;
+                row.Added.color = QuietInk;
                 row.Changed.text = string.Empty;
                 row.Removed.text = string.Empty;
                 return;
@@ -643,24 +808,24 @@ namespace GitView
                 row.Added.text = "·";
                 row.Changed.text = "·";
                 row.Removed.text = "·";
-                row.Added.color = quiet;
-                row.Changed.color = quiet;
-                row.Removed.color = quiet;
+                row.Added.color = QuietInk;
+                row.Changed.color = QuietInk;
+                row.Removed.color = QuietInk;
                 return;
             }
 
             // A zero is written as a dash in the quiet ink rather than in the
             // column's own colour, so "nothing removed" cannot be misread at a
             // glance as a count with a minus sign in front of it.
-            Fill(row.Added, entry.Added, "+", chosen ? Color.white : AddedInk, quiet);
-            Fill(row.Changed, entry.Changed, "~", chosen ? Color.white : ChangedInk, quiet);
-            Fill(row.Removed, entry.Removed, "-", chosen ? Color.white : RemovedInk, quiet);
+            Fill(row.Added, entry.Added, "+", DiffPalette.Added);
+            Fill(row.Changed, entry.Changed, "~", DiffPalette.Changed);
+            Fill(row.Removed, entry.Removed, "-", DiffPalette.Removed);
         }
 
-        private static void Fill(Text cell, int count, string sign, Color ink, Color quiet)
+        private static void Fill(Text cell, int count, string sign, int category)
         {
             cell.text = count == 0 ? "–" : sign + count;
-            cell.color = count == 0 ? quiet : ink;
+            cell.color = count == 0 ? QuietInk : DiffPalette.Ink(category);
         }
 
         /// <summary>
@@ -869,7 +1034,7 @@ namespace GitView
                 {
                     if (_rows[r].Entry == entry)
                     {
-                        BindCounts(_rows[r], entry, r == _selected);
+                        BindCounts(_rows[r], entry);
                     }
                 }
             }

@@ -312,7 +312,7 @@ namespace GitView
                 {
                     if (item != null)
                     {
-                        entries.Add(item.Key + "|" + item.Type + "=" + Value(item.RawValue));
+                        entries.Add(Describe(item));
                     }
                 }
             }
@@ -322,6 +322,24 @@ namespace GitView
                 return string.Empty;
             }
             return BlockRecord.FlattenSettings(entries);
+        }
+
+        /// <summary>
+        /// One setting -- its key, its type and its value -- as the one line of
+        /// text the diff compares.
+        ///
+        /// Public because the same rules have to apply to a setting read out of a
+        /// .bsg and to one read live off a block's mapper: <see cref="MapperWatch"/>
+        /// decides whether the player actually changed anything, and it would be
+        /// worse than useless if it disagreed with the diff about what a change is.
+        /// </summary>
+        public static string Describe(XData item)
+        {
+            if (item == null)
+            {
+                return string.Empty;
+            }
+            return item.Key + "|" + item.Type + "=" + Value(item.RawValue);
         }
 
         /// <summary>

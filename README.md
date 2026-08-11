@@ -33,9 +33,20 @@ Click a row and that version loads, with its changes drawn over it:
 - **orange** — blocks it moved, rotated, rescaled or retuned
 - **red** — blocks it deleted, left standing where they used to be
 
+The block of colour beside each of the three headings opens a picker for it:
+red, green, blue, and an opacity. Whatever you choose is used for both the counts
+in the list and the blocks over the machine — the text always at full strength,
+the blocks at the opacity you set, so you can make a change stand out against a
+dark machine or fade it back until you can see what is underneath. `RESET` puts
+one colour back. The choice lasts for the session.
+
 `Ctrl+Y` hides and shows the window and its overlay. It also steps aside on its
 own whenever the game puts up a menu — escape, load, options — and comes back
 when the menu does, the same way Besiege's own block panel behaves.
+
+Retuning a block — remapping its keys, moving a slider — does not, on its own,
+make Besiege take an autosave. This mod tells it to, so a change you cannot see
+on the machine still gets a version of its own to show up in.
 
 ## Installing
 

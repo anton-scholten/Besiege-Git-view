@@ -186,6 +186,37 @@ namespace GitView
             strip.anchoredPosition = new Vector2(box.center.x, edge) - space.rect.center;
         }
 
+        /// <summary>
+        /// Hangs a panel off the bottom-left corner of a control, in the space of
+        /// whatever it is parented to.
+        ///
+        /// Measured for the same reason <see cref="PlaceStrip"/> is: the control
+        /// being dropped from is a UIFactory prefab whose visible box need not be
+        /// its rect, and it sits inside a header inside a window, none of which are
+        /// pivoted or anchored the same way.
+        /// </summary>
+        public static void PlaceUnder(RectTransform panel, RectTransform under,
+                                      RectTransform space, float gap)
+        {
+            if (panel == null || under == null || space == null)
+            {
+                return;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            Bounds box = RectTransformUtility.CalculateRelativeRectTransformBounds(space, under);
+
+            panel.anchorMin = new Vector2(0.5f, 0.5f);
+            panel.anchorMax = new Vector2(0.5f, 0.5f);
+            panel.pivot = new Vector2(0f, 1f);
+            // As in PlaceStrip: the bounds are relative to the parent's pivot and
+            // anchoredPosition is relative to the anchor, which is the centre of the
+            // parent's rect. They coincide only for a centre-pivoted parent.
+            panel.anchoredPosition =
+                new Vector2(box.center.x - box.extents.x,
+                            box.center.y - box.extents.y - gap) - space.rect.center;
+        }
+
         public static Text AddText(Transform parent, string name, int fontSize,
                                    TextAnchor alignment)
         {

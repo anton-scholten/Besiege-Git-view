@@ -29,6 +29,7 @@ namespace GitView
         public const string PanelPrefab = "Panel";
         public const string TextPrefab = "Text";
         public const string ButtonPrefab = "Text Button";
+        public const string SliderPrefab = "Slider";
 
         /// <summary>
         /// Instantiates one of UIFactory's prefabs. Returns null (and says why) if
@@ -306,5 +307,72 @@ namespace GitView
             }
         }
 
+        /// <summary>
+        /// Takes a control's hover swell away, for controls too wide to swell.
+        ///
+        /// UIFactory grows a hovered button by 15% and shrinks a pressed one to
+        /// 85%, which is right for a button the size of a button. A table row is
+        /// seven hundred pixels wide, and 15% of that carries everything printed
+        /// near its ends tens of pixels sideways: the timestamp visibly jumps left
+        /// as the pointer arrives. No pivot fixes it, because a row has text at
+        /// both ends and a pivot can only hold one of them still.
+        ///
+        /// So rows do not swell, and say they are under the pointer by lighting up
+        /// instead — which is what Besiege's own lists do, and what a row of a
+        /// table should do anyway.
+        ///
+        /// The two scales are private to UIFactory, so the animation is switched
+        /// off rather than turned down: a disabled behaviour is not a valid handler
+        /// as far as uGUI's event system is concerned, so it is never told the
+        /// pointer arrived.
+        /// </summary>
+        public static void NoSwell(GameObject control)
+        {
+            if (control == null)
+            {
+                return;
+            }
+            try
+            {
+                Besiege.UI.Bridge.ScaleAnimation scale =
+                    control.GetComponent<Besiege.UI.Bridge.ScaleAnimation>();
+                if (scale != null)
+                {
+                    scale.enabled = false;
+                }
+            }
+            catch (Exception)
+            {
+                // An older UIFactory without that behaviour simply never swelled.
+            }
+        }
+
+        /// <summary>
+        /// Makes a button tint one of its own images as the pointer arrives and
+        /// presses.
+        ///
+        /// uGUI drives the tint straight onto the graphic's canvas renderer, so the
+        /// image's own colour stops mattering once this is on — which is why the
+        /// caller passes every state rather than setting a colour and a highlight.
+        /// </summary>
+        public static void HoverTint(Button button, Graphic target, Color normal,
+                                     Color hovered, Color pressed)
+        {
+            if (button == null || target == null)
+            {
+                return;
+            }
+            button.targetGraphic = target;
+            button.transition = Selectable.Transition.ColorTint;
+
+            ColorBlock colours = button.colors;
+            colours.normalColor = normal;
+            colours.highlightedColor = hovered;
+            colours.pressedColor = pressed;
+            colours.disabledColor = normal;
+            colours.colorMultiplier = 1f;
+            colours.fadeDuration = 0.08f;
+            button.colors = colours;
+        }
     }
 }

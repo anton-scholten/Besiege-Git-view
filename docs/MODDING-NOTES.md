@@ -36,6 +36,39 @@ The two kinds interleave in time and are the same thing to a diff: a snapshot
 with a time on it. Sorting them into one timeline is the only way the counts
 mean anything, since a manual save lands between two timed ones.
 
+### Retuning a block does not count as changing the machine
+
+`MachineUpdatedSinceLastSave` is set by exactly one thing:
+`ReferenceMaster.onMachineModified`, a plain `Action<Machine>` static field. Seven
+places in the game raise it —
+
+```
+Machine.FinishDraggedBlocks   Machine.OnAnalyzeComplete
+PlayerMachine.RemoveBlock     UndoSystem.PostUndoAction
+AddPiece.AddBlockTypeNoSound  AddPiece.PostRemoveBlock
+SymmetryController.AddSymBlocks
+```
+
+— and **none of them is in the block mapper**. Remap a key, drag a slider, flip a
+toggle: the flag stays clear, the sixty-second timer finds nothing to do, and the
+new setting is never written to a version at all.
+
+It hides well, because a tuning session nearly always moves a block eventually
+and the settings ride along with that save. It does not hide from a diff tool:
+change only a block's keys, wait, and the folder has no new version in it.
+
+`BlockMapper.onMapperOpen` and `onMapperClose` are public static `Action`s, and
+`BlockMapper.Current` is the `SaveableDataHolder` being edited — its
+`MapperTypes` are live, each with a `Serialize()` that gives the same `XData` the
+save would. Fingerprint on open, compare on close, and raise
+`onMachineModified` yourself if they differ. Raise the game's event rather than
+setting the autosave's flag directly: everything else listening (centre of mass,
+aerodynamics, the block counter) then hears what it would have heard anyway.
+
+Order is on your side. `Open` sets `Current` before invoking `onMapperOpen`;
+`Close` invokes `onMapperClose` before it tears anything down, and widgets apply
+their values as they are changed, so both callbacks see the real thing.
+
 ## The load screen already has a versions button
 
 `FileBrowserSlot.SetupVersionsButton` shows one when
@@ -200,7 +233,18 @@ side. Moving a pivot moves the rect, so put the insets back afterwards.
 
 `ScaleAnimation.Target` is public, so it can be checked; `ButtonHoverScale` and
 `ButtonPressedScale` are not, so how much it swells is not yours to tune — only
-where it grows from.
+where it grows from. For the record they default to **1.15** and **0.85**, which
+is 15% of the control's whole width carried sideways.
+
+A pivot only saves one edge, and a table row has text at both. Past a certain
+width the swell is simply the wrong animation: switch it off — `scale.enabled =
+false`, since a disabled behaviour is not a valid handler as far as uGUI's event
+system is concerned, so it is never told the pointer arrived — and say the same
+thing with colour instead. `Button.transition = ColorTint` with `targetGraphic`
+pointed at a background image of your own gives a hover that costs nothing per
+frame and moves nothing. Note that uGUI then drives that image's colour on the
+canvas renderer, so the image's own `color` stops mattering and every state has
+to be set in the `ColorBlock`.
 
 ### Centre a column's contents; do not try to align them to its edge
 
@@ -219,6 +263,28 @@ Centre both the heading and the values instead. A centred label only needs its
 container to be centred within the button, which it is, so it is indifferent to
 the whole question. It also happens to be what Besiege does with its own button
 labels.
+
+### A colour transition multiplies; it does not replace
+
+`Button.transition = ColorTint` drives the state's colour onto the target
+graphic's **canvas renderer**, and that is multiplied by the graphic's own
+`color` at draw time. Point it at an image you created transparent — the obvious
+thing to do for a highlight that starts off — and it stays invisible in every
+state, silently. Create the image opaque white and let the transition supply the
+colour.
+
+### UI Factory has no colour picker, and Besiege's is out of reach
+
+The nineteen prefabs are `Empty`, `Icon`, `Text`, `Text Button`, `Text Toggle`,
+`Text Dropdown`, `Icon Button`, `Icon Toggle`, `Button Dropdown`, `Input Field`,
+`Slider`, `Options`, `Scroll View`, `Blur`, `Panel`, `Mask`, `Window`, two
+tooltips, plus `WorldCanvas` and `KeymapCanvas`. Besiege's own picker is the
+block mapper's paint selector, behind `InternalModding`, and only opens for a
+block. Four `Slider`s in a `Panel` is the honest answer.
+
+Watch the name: **Besiege has its own `Slider` in the global namespace**, and it
+is the one an unqualified `Slider` binds to inside this mod. Write
+`UnityEngine.UI.Slider` in full.
 
 ### Whether a prefab's label is the prefab
 
@@ -311,11 +377,20 @@ than guessing.
 
 `PrefabMaster.GetPrefab(BlockType, out BlockPrefab)` gives a `BlockPrefab`, and
 `BlockPrefab.ghost` is the translucent preview Besiege shows while you drag a
-block out of the menu. Every block type has one; it is already the right shape
-and already visual-only — no colliders, no physics, nothing the game will
-mistake for part of the machine.
+block out of the menu. Every block type has one and it is already the right
+shape, which makes it the right thing to build a diff overlay out of.
 
-That makes it the right thing to build a diff overlay out of. The alternative,
+**It is not inert.** A ghost carries `GhostTrigger` — and on some blocks
+`GhostPinTrigger` — the behaviours that turn the preview red inside something and
+call `IntersectWarning.WarningFromWorldPos`, which is the game's INTERSECTION
+banner. They work off trigger colliders. Every ghost a diff overlay draws sits
+exactly on a block of the machine, so an overlay of a dozen blocks raises a dozen
+intersection warnings the instant it appears.
+
+Instantiate it, `SetActive(false)` before anything on it gets a frame, then strip
+every `MonoBehaviour`, `Collider` and `Rigidbody` out of the hierarchy and turn it
+back on. Disable each behaviour as well as destroying it: `Destroy` takes effect
+at the end of the frame, and one `Update` in between is one warning on screen. The alternative,
 tinting the real blocks' renderers, does not work: Besiege's blocks share their
 materials, so tinting one girder tints every girder.
 

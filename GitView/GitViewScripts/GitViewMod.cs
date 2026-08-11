@@ -35,6 +35,7 @@ namespace GitView
             BrowserWatch watch = _host.AddComponent<BrowserWatch>();
             watch.Bind(_history);
             _host.AddComponent<Hotkeys>();
+            _host.AddComponent<MapperWatch>();
 
             try
             {

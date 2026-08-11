@@ -25,6 +25,7 @@ public static class DiffTests
         Changes();
         ReissuedIdentifiers();
         Settings();
+        KeyBindings();
         Stamps();
         Sorting();
 
@@ -227,6 +228,66 @@ public static class DiffTests
            BlockRecord.FlattenSettings(new List<string>()));
     }
 
+    // -- key bindings ---------------------------------------------------------------
+
+    /// <summary>
+    /// A block whose keys were remapped and nothing else. Besiege keeps key
+    /// bindings in the same per-block data as sliders and toggles -- a StringArray
+    /// per action, "bmt-left" and the rest -- so they are compared like any other
+    /// setting and a remapped block is a changed block, not a deleted one and a new
+    /// one. Worth pinning down: it is the one kind of change that leaves the
+    /// machine looking identical, so nothing else about the block gives it away.
+    /// </summary>
+    static void KeyBindings()
+    {
+        BlockRecord before = Block("hinge", 28, 1, 0, 0);
+        before.Settings = Keys("LeftArrow", "RightArrow");
+        BlockRecord after = Block("hinge", 28, 1, 0, 0);
+        after.Settings = Keys("Keypad4", "Keypad6");
+
+        False("a remapped key is a change", before.Matches(after));
+
+        DiffResult diff = BlockDiff.Compare(Machine(before), Machine(after));
+        Is("nothing added", 0, diff.Added.Count);
+        Is("nothing removed", 0, diff.Removed.Count);
+        Is("the block is changed", 1, diff.Changed.Count);
+        True("and it is the newer one, which is what the overlay draws",
+             diff.Changed.Count == 1 && diff.Changed[0] == after);
+
+        // Besiege reissues a guid when a block is copied or restored by an undo, so
+        // the same remapping has to survive the block arriving with a new identity:
+        // pass 2 cannot pair them, since their settings differ, which leaves pass 3
+        // to recognise the same block type in the same place.
+        BlockRecord reissued = Block("hinge-copy", 28, 1, 0, 0);
+        reissued.Settings = after.Settings;
+        DiffResult moved = BlockDiff.Compare(Machine(before), Machine(reissued));
+        Is("a reissued guid is still one changed block", 1, moved.Changed.Count);
+        Is("not an addition", 0, moved.Added.Count);
+        Is("not a removal", 0, moved.Removed.Count);
+
+        // Binding a key to a block that had none is a change too: the whole entry
+        // appears rather than one value being replaced.
+        BlockRecord unbound = Block("hinge", 28, 1, 0, 0);
+        False("binding a key for the first time is a change", unbound.Matches(after));
+
+        // And the reverse of all of it: the same keys written in a different order
+        // are the same keys.
+        BlockRecord same = Block("hinge", 28, 1, 0, 0);
+        same.Settings = BlockRecord.FlattenSettings(new List<string>(new string[] {
+            "bmt-right|StringArray=RightArrow",
+            "bmt-rotation-speed|Single=" + BlockRecord.Quantise(1f),
+            "bmt-left|StringArray=LeftArrow" }));
+        True("the order settings are listed in is not a change", before.Matches(same));
+    }
+
+    static string Keys(string left, string right)
+    {
+        return BlockRecord.FlattenSettings(new List<string>(new string[] {
+            "bmt-left|StringArray=" + left,
+            "bmt-right|StringArray=" + right,
+            "bmt-rotation-speed|Single=" + BlockRecord.Quantise(1f) }));
+    }
+
     // -- version names --------------------------------------------------------------
 
     static void Stamps()
@@ -338,6 +399,12 @@ public static class DiffTests
     {
         checks++;
         if (!condition) { failures.Add(what); }
+    }
+
+    static void False(string what, bool condition)
+    {
+        checks++;
+        if (condition) { failures.Add(what); }
     }
 
     static void Is(string what, object expected, object actual)

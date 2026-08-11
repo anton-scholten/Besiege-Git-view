@@ -28,7 +28,9 @@ The sources divide along one line, and it is worth keeping:
 | `BlockDiff.cs` the three-pass matcher | `GhostView.cs` draws the overlay |
 | `MachineSnapshot.cs` a version's blocks | `HistoryView.cs`, `UIF.cs`, `UIBuild.cs` the window |
 | `VersionEntry.cs` names, stamps, counts | `BrowserWatch.cs` the load-screen button |
-| `RowSort.cs` the column ordering | `IconArt.cs`, `GitViewMod.cs` |
+| `RowSort.cs` the column ordering | `MapperWatch.cs` the autosave nudge |
+| `DiffPalette.cs` the three colours | `ColourPicker.cs` choosing one |
+| | `IconArt.cs`, `GitViewMod.cs` |
 
 The left column is where the mod is actually right or wrong, and `run-tests.sh`
 compiles **only** those files. That is deliberate: if the diff ever needs a
@@ -68,7 +70,16 @@ back a hair off. Settings are worse: some of them hold live physics values. See
 **The overlay is Besiege's own placement ghosts, not a tint.** Blocks share
 their materials, so tinting one girder tints every girder, and putting the
 original back means being right about what it was. A ghost is removed by
-deleting it.
+deleting it. It is also not inert when it arrives — `GhostView.Sterilise` is
+what stops every diff raising a screenful of INTERSECTION warnings.
+
+**The mod nudges Besiege's autosave.** Retuning a block — a key, a slider, a
+toggle — does not set `MachineUpdatedSinceLastSave`, so Besiege never writes a
+version of it and there is nothing for a diff to find. `MapperWatch` compares the
+block mapper's settings across an open and raises the game's own
+`onMachineModified` if they differ. This is the one place the mod changes what
+the game does rather than only looking at it, and it is deliberate: without it
+"which blocks changed" cannot answer the most common kind of change.
 
 **Nothing reads a file directly.** Not politeness — `System.Xml` and `System.IO`'s
 file classes are blacklisted, so a mod cannot parse its own saves. Listing goes
@@ -85,6 +96,13 @@ of a five-hundred-block machine. Doing that in one frame is a visible freeze;
 done a version per frame the window is usable immediately and the numbers arrive
 behind it. Only two snapshots are held at once.
 
+**There is one colour per category, not two.** `DiffPalette` holds it and both
+the list and the overlay read from there, so a count and the blocks it is
+counting can never be written in different greens. The alpha is the only thing
+that differs by use: shells honour it, text forces it to 1. The overlay keeps one
+material per category so that dragging a slider recolours every shell on screen
+with one assignment.
+
 **Thumbnails load and unload with the scroll.** They are 512x512 PNGs, a
 megabyte each as a texture.
 
@@ -100,8 +118,8 @@ fixed and covered by a test: settings compared as written reported a piston as
 changed once a minute because its start-position wobbled in the eighth decimal
 place.
 
-74 assertions cover the matcher, the tolerances, the quantisation, the timestamp
-parsing and the sorting. The mod compiles under Besiege's own compiler and
+84 assertions cover the matcher, the tolerances, the quantisation, key bindings,
+the timestamp parsing and the sorting. The mod compiles under Besiege's own compiler and
 references nothing the loader forbids.
 
 **Confirmed in game** on one run: the mod loads, the compare button appears on
@@ -143,5 +161,12 @@ Still not confirmed:
   quad of its own — read that first if the icon is still wrong.
 - **whether a machine *file* slot** (rather than an AutoSave folder) shows more
   than one button, which would change where ours goes. The same log line says.
+- **that stripping a ghost's behaviours silences the INTERSECTION warning.** The
+  cause is not in doubt — `GhostTrigger.Update` is one of only four callers of
+  `IntersectWarning`, and the other three are slider blocks — but that the strip
+  happens early enough has not been watched.
+- **that the mapper nudge produces a version.** Remap a key, change nothing else,
+  wait out the sixty seconds, and a new row should appear with one changed block
+  in it.
 
 Errors appear in `Player.log`, and in the in-game console with `show_logs true`.
