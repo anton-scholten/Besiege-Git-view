@@ -1,0 +1,9 @@
+# Built by tools/build.sh from GitViewScripts/*.cs
+GitView/GitViewScripts.dll
+GitView/GitViewScripts.dll.mdb
+
+# Written by the mod at runtime
+GitView/settings.txt
+
+*.pyc
+__pycache__/

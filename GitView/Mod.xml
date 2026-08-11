@@ -1,0 +1,55 @@
+﻿<Mod>
+
+	<!-- General information about the mod. -->
+	<Name>Git View</Name>
+	<Author>wizz6rd</Author>
+	<Version>0.1.0</Version>
+
+	<Description>
+See what changed between two versions of a machine. Besiege already keeps a
+backup of every machine as you build it; this reads that history. Press the
+compare button on a machine in the load screen and its newest version opens
+alongside a list of every autosave -- thumbnail, timestamp, and how many blocks
+that save added, changed and removed. Pick a row to load it, with the blocks it
+added lit green, the ones it moved or retuned orange, and the ones it deleted
+left behind as red ghosts.
+	</Description>
+
+	<Debug>false</Debug>
+
+	<!-- Reads the local autosave folder and loads machines into the build area.
+	     Doing either mid-session would fight with the other players' state. -->
+	<MultiplayerCompatible>false</MultiplayerCompatible>
+
+	<!-- Deliberately NOT using <LoadInTitleScreen />. With it, the game runs this
+	     mod's code before the player can reach the mods menu, so a fatal error
+	     here would lock them out of Besiege entirely. Without it the mod loads on
+	     entering a level, which is where the load screen and the build area are. -->
+
+	<LoadOrder>0</LoadOrder>
+
+	<!-- Custom code, built ahead of time by tools/build.sh from the .cs files in
+	     GitViewScripts/ (which ship alongside it, as the source).
+
+	     It has to be a pre-built <Assembly> rather than a <ScriptAssembly> for
+	     two reasons: a ScriptAssembly cannot reference another mod, and this one
+	     references UI Factory 3; and the game compiles a ScriptAssembly once and
+	     caches the result forever, so editing the sources would do nothing. -->
+	<Assemblies>
+		<Assembly path="GitViewScripts.dll" />
+	</Assemblies>
+
+	<!-- Rebindable in Besiege's own controls screen. Ctrl+Y is unused by the base
+	     game (Ctrl+K is the console, Ctrl+H reloads mods). -->
+	<Keys>
+		<Key name="toggle-history" defaultModifier="LeftControl" defaultTrigger="Y" />
+	</Keys>
+
+	<!-- No <Resources>. The button icon is drawn into a texture at runtime, and
+	     version thumbnails are the game's own PNGs read through its asset
+	     importer, so there is nothing for the loader to preload. -->
+
+
+
+<!-- This value is automatically generated. Do not change it or you may break machine&level save files. -->
+</Mod>
