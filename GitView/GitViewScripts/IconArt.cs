@@ -277,8 +277,9 @@ namespace GitView
         }
 
         // A dash and the gap after it, in pixels, which are units once the sprite is
-        // made at one pixel per unit. Long enough to read as a dashed line at the
-        // width of a two-unit bar, short enough that a row's edge fits several.
+        // made at the canvas's own pixels-to-the-unit. Long enough to read as a
+        // dashed line at the width of a two-unit bar, short enough that a row's edge
+        // fits several.
         private const int DashLit = 7;
         private const int DashGap = 5;
 
@@ -308,6 +309,60 @@ namespace GitView
                     bool lit = (down ? y : x) < DashLit;
                     pixels[y * width + x] = new Color32(255, 255, 255,
                                                         lit ? (byte)255 : (byte)0);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
+        /// <summary>
+        /// A circle: the button beside a version's number that pins it as the one
+        /// everything is compared against. Empty when it is not pinned, filled when
+        /// it is.
+        ///
+        /// A ring and a disc are the same drawing with and without a middle, so one
+        /// routine draws both -- a thickness for the ring, nothing for the disc --
+        /// and the two are then guaranteed to be the same circle.
+        ///
+        /// <paramref name="spread"/> is how much of the picture the circle takes up,
+        /// which is how it grows under the pointer: the rect stays the size it is and
+        /// the drawing inside it gets bigger, so nothing has to be scaled or moved.
+        /// </summary>
+        public static Texture2D Disc(int size, float thickness, float spread)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+
+            // A pixel of air inside the edge, so that the circle is round rather
+            // than four flats where it meets the sides of its own texture.
+            float outer = (0.5f - 1f / size) * Mathf.Clamp01(spread);
+            float inner = thickness > 0f
+                ? Mathf.Max(0f, outer - thickness * Mathf.Clamp01(spread)) : -1f;
+
+            Color32[] pixels = new Color32[size * size];
+            float step = 1f / (size * Samples);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < Samples; sy++)
+                    {
+                        for (int sx = 0; sx < Samples; sx++)
+                        {
+                            float u = (x * Samples + sx + 0.5f) * step - 0.5f;
+                            float v = (y * Samples + sy + 0.5f) * step - 0.5f;
+                            float radius = Mathf.Sqrt(u * u + v * v);
+                            if (radius <= outer && radius >= inner)
+                            {
+                                hits++;
+                            }
+                        }
+                    }
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                                                       (byte)(255 * hits / (Samples * Samples)));
                 }
             }
             texture.SetPixels32(pixels);

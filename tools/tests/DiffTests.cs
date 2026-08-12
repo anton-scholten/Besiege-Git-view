@@ -454,11 +454,25 @@ public static class DiffTests
         SortingIsAnOrder();
         WhatCameBefore();
 
-        // The two-line row: a name Besiege wrote says the time and nothing else, so
-        // it stays one line. Anything else puts its own name above the time.
+        // The two-line row: whatever the row is called goes on the first line and its
+        // time on the second, so that both line up under the two headings over that
+        // column. A name Besiege wrote is a timestamp and nothing else, so its first
+        // line holds only what the name says beyond the time -- which is whether the
+        // player saved it or the timer did.
         VersionEntry auto = Row("aut 26.06.27 15-34-37", 4, 0, 0, 0);
         auto.Named = true;
-        False("a version reads as one line", auto.Lines().Contains("\n"));
+        DateTime taken;
+        bool byHand;
+        VersionEntry.TryReadStamp(auto.FileName, out taken, out byHand);
+        auto.Saved = taken;
+        True("a version writes its time on the time line",
+             auto.Lines().StartsWith("\n"));
+        Contains("and nothing above it", auto.Lines(), "2026-06-27");
+        VersionEntry saved = Row("ver 26.06.27 15-34-37", 6, 0, 0, 0);
+        saved.Named = true;
+        saved.Manual = true;
+        True("a save the player took says so on the name line",
+             saved.Lines().StartsWith("SAVED\n"));
         VersionEntry machine = Row("Tow-truck", 5, 0, 0, 0);
         True("a machine's name goes above its time", machine.Lines().StartsWith("Tow-truck\n"));
 
@@ -498,12 +512,11 @@ public static class DiffTests
         Is("and so do rows with the same count", "machine 0", tied[0].FileName);
     }
 
-    // What a row is compared against when nothing is pinned. The case that matters
-    // is machines picked out of the load screen, most of which have no readable date
-    // at all: comparing on time alone found nothing before any of them, so every row
-    // said it was the oldest and neither a diff nor the arrow between the two was
-    // drawn -- while the counts beside them had been worked out against the machine
-    // picked before.
+    // What a row is compared against when nothing is pinned: the row under it, in
+    // whatever order the list is being shown. So it follows the sort rather than
+    // holding still against it -- the counts in the list are the differences between
+    // each row and the one below, which is what the arrangement in front of the
+    // player says they are.
     static void WhatCameBefore()
     {
         List<VersionEntry> undated = new List<VersionEntry>();
@@ -515,33 +528,73 @@ public static class DiffTests
             undated.Add(row);          // Saved left at DateTime.MinValue, as picked
         }                              // machines with no autosaves come out
 
-        Is("the first has nothing before it", null,
-           RowSort.Previous(undated, undated[0]));
-        Is("and every other has the one picked before it", "machine 1",
-           RowSort.Previous(undated, undated[2]).FileName);
+        Is("a row is compared with the one under it", "machine 1",
+           RowSort.Below(undated, undated[0]).FileName);
+        Is("and the bottom row has nothing under it", null,
+           RowSort.Below(undated, undated[undated.Count - 1]));
 
-        // Which holds however the list is being shown. Sorting by time puts undated
-        // rows in name order, and that must not change what is compared with what.
+        // Which is a fact about the arrangement, so re-arranging changes it. Sorting
+        // by time puts undated rows in name order.
         undated[0].FileName = "zulu";
         undated[3].FileName = "alpha";
         RowSort.Apply(undated, RowSort.ByTime, true);
         Is("undated rows sort by name", "alpha", undated[0].FileName);
         Is("still by name, reversed", "zulu",
            Reversed(undated, RowSort.ByTime)[0].FileName);
-        Is("but what came before is still the one picked before", "machine 1",
-           RowSort.Previous(undated, undated[Where(undated, "machine 2")]).FileName);
+        Is("and the pairing follows the new order", undated[1].FileName,
+           RowSort.Below(undated, undated[0]).FileName);
+        Is("wherever a row has ended up", undated[3].FileName,
+           RowSort.Below(undated, undated[2]).FileName);
 
-        // Versions of one machine still compare against the save before them,
-        // whatever order the list is being shown in. Their numbers are their places
-        // in the history, which is what VersionScan gives them.
+        // A history read newest-first -- the order the window opens in -- compares
+        // each save with the save before it, which is what the row under it is.
         List<VersionEntry> history = new List<VersionEntry>();
         history.Add(Numbered(Row("newest", 9, 0, 0, 0), 3));
-        history.Add(Numbered(Row("oldest", 1, 0, 0, 0), 1));
         history.Add(Numbered(Row("middle", 5, 0, 0, 0), 2));
+        history.Add(Numbered(Row("oldest", 1, 0, 0, 0), 1));
         Is("the save before the newest is the middle one", "middle",
-           RowSort.Previous(history, history[0]).FileName);
-        Is("the oldest still has nothing before it", null,
-           RowSort.Previous(history, history[1]));
+           RowSort.Below(history, history[0]).FileName);
+        Is("and the oldest, at the bottom, has nothing before it", null,
+           RowSort.Below(history, history[2]));
+
+        WhatTheCountsAreOf(history);
+    }
+
+    // What the counts in a row are measured against, which is not the row under it:
+    // it is the version before it in the machine's own history, whatever order the
+    // list is in. They have to be a fact about the version rather than about the
+    // arrangement, or the columns holding them cannot be sorted -- clicking ADDED
+    // would put the rows in an order that stopped being true the moment it landed.
+    static void WhatTheCountsAreOf(List<VersionEntry> history)
+    {
+        Is("a version's counts are against the version before it", "middle",
+           RowSort.Earlier(history, history[0]).FileName);
+        Is("and the oldest has nothing before it", null,
+           RowSort.Earlier(history, history[2]));
+
+        // The point of the exercise: this is the same answer however the list has
+        // been arranged, including upside down.
+        RowSort.Apply(history, RowSort.ByNumber, true);
+        Is("which holds with the list the other way up", "middle",
+           RowSort.Earlier(history, history[Last(history, "newest")]).FileName);
+        RowSort.Apply(history, RowSort.ByName, false);
+        Is("and in any other order", "middle",
+           RowSort.Earlier(history, history[Last(history, "newest")]).FileName);
+
+        True("count columns are known to need reading first",
+             RowSort.IsCount(RowSort.ByAdded) && RowSort.IsCount(RowSort.ByBlocks));
+        False("and the columns that are already known are not",
+              RowSort.IsCount(RowSort.ByName) || RowSort.IsCount(RowSort.ByNumber) ||
+              RowSort.IsCount(RowSort.ByTime));
+    }
+
+    static int Last(List<VersionEntry> rows, string name)
+    {
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].FileName == name) { return i; }
+        }
+        return -1;
     }
 
     static VersionEntry Numbered(VersionEntry entry, int number)
@@ -555,15 +608,6 @@ public static class DiffTests
         List<VersionEntry> copy = new List<VersionEntry>(rows);
         RowSort.Apply(copy, column, false);
         return copy;
-    }
-
-    static int Where(List<VersionEntry> rows, string name)
-    {
-        for (int i = 0; i < rows.Count; i++)
-        {
-            if (rows[i].FileName == name) { return i; }
-        }
-        return -1;
     }
 
     // -- fixtures ---------------------------------------------------------------------

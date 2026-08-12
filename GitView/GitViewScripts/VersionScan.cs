@@ -163,10 +163,6 @@ namespace GitView
             {
                 versions[i].Number = i + 1;
             }
-            if (versions.Count > 0)
-            {
-                versions[0].IsFirst = true;
-            }
             return versions;
         }
 

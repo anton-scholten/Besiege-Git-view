@@ -150,14 +150,6 @@ namespace GitView
             // the load screen said and the only thing tying a row here to a machine
             // the player picked out there. A version's number is its place in a
             // history; a chosen machine's is the place the player gave it.
-            //
-            // The first one picked has nothing before it to be compared against --
-            // by that same order, not by time, since most machines picked out of the
-            // load screen have no readable date at all.
-            if (rows.Count > 0)
-            {
-                rows[0].IsFirst = true;
-            }
             return rows;
         }
     }

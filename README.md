@@ -22,36 +22,56 @@ version of that machine:
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | **9** | *thumbnail* | | 2026-06-27  15:42:38 | 151 | +11 | ~2 | — |
 | **8** | *thumbnail* | | 2026-06-27  15:41:38 | 142 | +7 | — | -8 |
-| **7** | *thumbnail* | | 2026-06-27  15:39:05  SAVED | 143 | +1 | ~8 | — |
+| **7** | *thumbnail* | SAVED | 2026-06-27  15:39:05 | 143 | +1 | ~8 | — |
 
-Each row says what that save did to the machine compared with the save before
-it, and how big the machine was at that point. Every heading carries a pair of
+Each row says what that save did to the machine — what it added, changed and
+removed compared with the save before it — and how big the machine was at that
+point. Every heading carries a pair of
 arrows: the lit one is the order in force, so clicking a heading sorts by it and
 clicking again reverses it. `version` sorts by the number, `name` by what the
 machine is called and `time` by when it was saved — which are the same order for
 one machine's history, and are not once the list holds machines you chose
 yourself. `name` and `time` head the same column, because a machine whose name is
 not just a timestamp shows that name on the first line and the timestamp under
-it. Machines the load screen cannot put a date to sort by name under `time`,
+it. A version out of an autosave folder is *only* a timestamp, so its first line
+holds what its name says beyond the time — `SAVED` when you took that save
+yourself rather than the timer — and the time itself stays on the line under the
+`time` heading, in step with every other row. Machines the load screen cannot put a date to sort by name under `time`,
 since "the order they happened to be in" is not an order anybody asked for. The first column is headed `selection` instead when the list is machines you
-picked out by hand, since its number is then the order you picked them in.
+picked out by hand, since its number is then the order you picked them in — and
+such a list opens in that order, most recently picked at the top, so each machine
+is compared with the one you picked before it.
 
 The number on the left is the version's place in the history — 1 is the oldest
 and the largest is the newest. It belongs to the version rather than to the row,
-so sorting by how much a save removed still leaves you able to see what came
-before what, and that first heading puts the list back in that order. For
+so sorting by how much a save removed still leaves you able to see which version
+is which, and that first heading puts the list back in that order. For
 machines you chose yourself the number is the order you chose them in, which is
 what the marks in the load screen said.
 
-The number itself is a button, and pressing it pins that version as the one
-everything is compared against — the source. Normally a row is compared with the
-save before it, which is what you want for reading a history a minute at a time.
-Pin a version — its number turns red — and every version you click is compared
-with *that* one instead, so you can ask what a whole afternoon of building did
-rather than what one minute of it did. One version can be pinned, or none;
-pressing the pinned number again unpins it and the rows go back to being
-compared with the save before. The status line at the bottom always names what
-the version on screen was compared with.
+Those counts belong to the version too, not to where it currently sits: they are
+what that save did, read once and then fixed, which is what makes `added`,
+`changed` and `removed` columns you can actually sort by. They are read in the
+background over the first few seconds — a row shows a dot until its numbers
+arrive — so a heading clicked while the dots are still there sorts the list again
+by itself once they are all in.
+
+What *is* about the arrangement is the diff on screen: with nothing pinned, the
+row you click is compared with **the row under it**. In the order the window opens
+in, that is the save before it. Put any two rows next to each other, by sorting or
+by pinning, and you can compare them.
+
+Left of the number is a small circle, and pressing it pins that version as the
+one everything is compared against — the source. Pin a version — its circle fills
+red — and every version you click is
+compared with *that* one instead, so you can ask what a whole afternoon of
+building did rather than what one minute of it did. One version can be pinned, or
+none; pressing the filled circle again lets go of it and the rows go back to
+being compared with the row under them. Whichever version the diff on screen is
+measured from is marked either way — filled red when you pinned it, an empty red
+ring when it is simply the one that came before — so the far end of the
+comparison is always something you can see. The status line at the bottom always
+names what the version on screen was compared with.
 
 The counts follow the pin: with a version pinned, every row says what that
 version added, changed and removed **relative to the pinned one** rather than
@@ -70,20 +90,23 @@ Braces, fuel lines and winches are drawn along their whole length rather than
 just at the end they are anchored to, since where the far end is is most of what
 a brace *is*.
 
-The window opens on the difference across the whole list: the first row is pinned
-as the source and the last is loaded, so a machine's history opens on everything
-that has happened to it since its oldest save, and a handful of machines opens on
-the difference between the first one you picked and the last. Anything narrower is
-a click away, and unpinning goes back to a save at a time.
+The window opens on its own top row with nothing pinned: the first row is loaded
+and compared with the second, which is the same thing the counts beside it are
+saying. So a machine's history opens on what its newest save did, and a handful of
+machines opens on the difference between the last one you picked and the one
+before. Anything wider is a pin away.
 
 Both ends of a comparison are marked: the machine you clicked is framed in red,
 the one it is being compared with is framed in the same red dashed, and an arrow
-joins them — out of the number of the one it is measured *from*, down the outside
-of the list, and back in at the number of the one you are looking at. It follows
+joins them — out of the filled circle of the one it is measured *from*, down the
+outside of the list, and back in at the circle of the one you are looking at,
+with a few heads down the run so that which way it goes is legible even when both
+of its ends are off the top and bottom of a long list. It follows
 the pin and the sort, so it always points at the pair the status line is
 describing.
 
-The cog in the window's title bar, beside the cross, opens **block colors**: all
+The cog in the window's title bar, beside the cross, opens **block colors**
+alongside the list, tops level: all
 four at once — unchanged, added, changed, removed — each on the same colour slider
 Besiege puts on a block, with its own opacity slider under it and a box beside
 each for typing an exact value: `#RRGGBB` for the colour, a percentage for the
@@ -122,7 +145,7 @@ because it is about all of them. Hover it and it says how many machines it
 will compare; press it and the load screen closes, and the history window opens
 listing the machines you chose instead of the versions of one machine.
 Everything in it works the same way from there: click a row to load that machine
-and see what it changed, press a number to pin that machine as the one
+and see what it changed, press a circle to pin that machine as the one
 everything is compared against.
 
 Autosave folders themselves cannot be picked — pressing the branch button on one

@@ -43,9 +43,6 @@ namespace GitView
         /// <summary>False until the background pass has diffed this version.</summary>
         public bool Counted;
 
-        /// <summary>The oldest version has nothing before it to be compared against.</summary>
-        public bool IsFirst;
-
         /// <summary>
         /// True when Besiege wrote this name and it was read: the kind and the time
         /// both mean something. False for a file somebody renamed, whose date came
@@ -201,20 +198,25 @@ namespace GitView
         }
 
         /// <summary>
-        /// How the row reads: the timestamp on its own where that is all the name
-        /// says, and the machine's name above it where it says something else.
+        /// How the row reads: the name on the first line and the time under it,
+        /// which is the order the two headings over that column are in.
         ///
-        /// A version out of an autosave folder is called "aut 26.06.27 15-34-37",
-        /// which is the timestamp written twice if it is written twice. A machine
-        /// chosen by hand is called whatever the player called it, and that is the
-        /// first thing worth knowing about the row -- with the time under it,
+        /// A version out of an autosave folder is called "aut 26.06.27 15-34-37" --
+        /// a timestamp and nothing else -- so its name line holds what the name says
+        /// beyond the time, which is whether the player saved it themselves or the
+        /// timer took it. That leaves the timestamp on the line under the word TIME
+        /// rather than on the line under NAME, in step with every other row, instead
+        /// of one kind of row writing its time where another writes its name.
+        ///
+        /// A machine chosen by hand is called whatever the player called it, and that
+        /// is the first thing worth knowing about the row -- with the time under it,
         /// because two machines with different names still have an order.
         /// </summary>
         public string Lines()
         {
             if (Named)
             {
-                return Stamp() + (Manual ? "  SAVED" : string.Empty);
+                return (Manual ? "SAVED" : string.Empty) + "\n" + Stamp();
             }
             // A machine nobody can put a time to is written as what it is: a name.
             // Better an empty time column than a made-up one, and the load screen

@@ -39,6 +39,22 @@ namespace GitView
         public const int ByBlocks = 6;
         public const int ColumnCount = 7;
 
+        /// <summary>
+        /// Whether a column holds numbers that have to be read out of the files
+        /// before they mean anything.
+        ///
+        /// Worth asking, because those are the columns a player can sort by before
+        /// there is anything to sort: the list is on screen in a fraction of a second
+        /// and the counts arrive over the next few, so a heading clicked early orders
+        /// the rows by a column of dots. The order is applied again when the reading
+        /// finishes.
+        /// </summary>
+        public static bool IsCount(int column)
+        {
+            return column == ByAdded || column == ByChanged || column == ByRemoved ||
+                   column == ByBlocks;
+        }
+
         public static string ColumnName(int column)
         {
             return ColumnName(column, false);
@@ -105,31 +121,68 @@ namespace GitView
         }
 
         /// <summary>
-        /// The row before this one in the list's own order, or null if it is the
-        /// first there is.
+        /// The version before this one in the machine's own history: the largest
+        /// number below this one, or null if this is the oldest there is.
         ///
-        /// By the number, which is the one order that means something in both kinds
-        /// of list: a version's place in its machine's history, and a chosen
-        /// machine's place in the order the player picked them. Deliberately not by
-        /// time. Machines picked out of the load screen often have no readable date
-        /// at all, so any number of them share a time -- comparing on time found
-        /// nothing before *any* of them, every row claimed to be the oldest, and no
-        /// diff was drawn. The counts are worked out walking this same order, so
-        /// this is the row whose numbers are already on screen beside it.
+        /// Nothing to do with how the list is arranged. This is what the counts in a
+        /// row are measured against, and they have to be a fact about the version --
+        /// what that save did -- or the columns holding them cannot be sorted. A
+        /// count that changed with the arrangement would mean sorting by "added" put
+        /// the rows in an order that was true a moment ago and is not true of the
+        /// numbers now beside them.
+        ///
+        /// By number rather than by time, which is the same thing for one machine's
+        /// versions and is not for machines picked out by hand: the load screen
+        /// cannot date most of those, so any number of them share a time of "none at
+        /// all", while the number is always the order they were picked in.
         /// </summary>
-        public static VersionEntry Previous(List<VersionEntry> rows, VersionEntry entry)
+        public static VersionEntry Earlier(List<VersionEntry> rows, VersionEntry entry)
         {
             if (rows == null || entry == null)
             {
                 return null;
             }
-            List<VersionEntry> ordered = new List<VersionEntry>(rows);
-            Apply(ordered, ByNumber, true);
-            for (int i = 1; i < ordered.Count; i++)
+            VersionEntry best = null;
+            for (int i = 0; i < rows.Count; i++)
             {
-                if (ordered[i] == entry)
+                VersionEntry row = rows[i];
+                if (row == entry || row.Number >= entry.Number)
                 {
-                    return ordered[i - 1];
+                    continue;
+                }
+                if (best == null || row.Number > best.Number)
+                {
+                    best = row;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The row under this one, in the order the list is being shown in, or null
+        /// if it is the bottom row.
+        ///
+        /// What the machine on screen is compared with when nothing is pinned: the
+        /// row you can see under it, whichever heading the list is sorted by. That
+        /// keeps the arrow a picture of the comparison -- it joins two rows that are
+        /// next to each other -- and it lets a diff be taken between any two versions
+        /// by putting them next to each other.
+        ///
+        /// Not what the counts in the columns are measured against; those are
+        /// <see cref="Earlier"/>, and the difference between the two is the
+        /// difference between what you are looking at and what the table says.
+        /// </summary>
+        public static VersionEntry Below(List<VersionEntry> rows, VersionEntry entry)
+        {
+            if (rows == null || entry == null)
+            {
+                return null;
+            }
+            for (int i = 0; i + 1 < rows.Count; i++)
+            {
+                if (rows[i] == entry)
+                {
+                    return rows[i + 1];
                 }
             }
             return null;
