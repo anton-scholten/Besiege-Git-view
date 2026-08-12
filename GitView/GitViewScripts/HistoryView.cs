@@ -11,8 +11,32 @@ namespace GitView
     {
         public GameObject Root;
         public RectTransform Rect;
+
+        /// <summary>
+        /// The version's number, which is the button that pins this version as the
+        /// one to compare against. <see cref="Number"/> is its label.
+        /// </summary>
+        public Button Pin;
+
+        /// <summary>
+        /// The block of colour behind the number, transparent until the row is
+        /// pinned. An image of ours rather than the button's own background -- see
+        /// <see cref="HistoryView.BuildNumber"/>.
+        /// </summary>
+        public Image PinFill;
+
+        /// <summary>
+        /// The four bars that frame the row when it is the version on screen.
+        /// </summary>
+        public Image[] Edges;
+
+        public Text Number;
         public RawImage Thumbnail;
         public Text Stamp;
+
+        /// <summary>How many blocks the machine has at this version, all told.</summary>
+        public Text Blocks;
+
         public Text Added;
         public Text Changed;
         public Text Removed;
@@ -33,8 +57,42 @@ namespace GitView
     public class HistoryView : MonoBehaviour
     {
         private const int CanvasOrder = 29000;
-        private const float WindowWidth = 720f;
+
+        /// <summary>
+        /// Wide enough for four count columns of the width the three had. The window
+        /// grew by exactly one of them when the block count got a column of its own,
+        /// so that nothing else had to give up room to it -- a timestamp column
+        /// squeezed by a fifth would have started wrapping its own values.
+        /// </summary>
+        private const float WindowWidth = 850f;
         private const float WindowHeight = 560f;
+
+        /// <summary>
+        /// Where the window opens the first time, in canvas units from the middle
+        /// of a 1920x1080 canvas: up in the top left, clear of the toolbar across
+        /// the top and of the block palette along the bottom, leaving the machine
+        /// the whole right-hand side of the screen to be looked at in.
+        ///
+        /// The margin is the same on both sides of the corner: the window's top
+        /// edge sits at 389, which is 53 units under the toolbar, so its left edge
+        /// sits 53 units in from the screen's, at -907. That puts the middle of an
+        /// 850-wide window at -482. It used to be -547, which was the same
+        /// arithmetic for a window 130 units narrower -- when the blocks column
+        /// widened the window, the left margin was what paid for it, and the window
+        /// ended up against the edge of the screen.
+        /// </summary>
+        private static readonly Vector2 WindowHome =
+            new Vector2(-960f + 53f + WindowWidth * 0.5f, 109f);
+
+        /// <summary>
+        /// How far the window has to move before it is worth storing. Dragging it
+        /// changes the position every frame, and a preference does not need to
+        /// follow that; it needs to be right when the game closes.
+        /// </summary>
+        private const float MovedEnough = 0.5f;
+
+        /// <summary>Seconds between attempts to put a lost overlay back.</summary>
+        private const float RedrawInterval = 0.5f;
         private const float RowHeight = 66f;
         private const float HeaderHeight = 34f;
         private const float StatusHeight = 26f;
@@ -44,16 +102,45 @@ namespace GitView
         private const int RowFontSize = 15;
         private const int HeaderFontSize = 13;
 
+        /// <summary>
+        /// The counts are written at the size of the version number, which is the
+        /// other thing in a row worth reading from across the screen. The timestamp
+        /// stays smaller: it is the row's label rather than its answer, and at this
+        /// size it would not fit its column anyway.
+        /// </summary>
+        private const int CountFontSize = NumberFontSize;
+
         // Column edges as fractions of the row's width, and the padding inside
         // one. One table, used by both the header and every row, so a heading and
         // the values under it cannot drift apart.
-        private const float ThumbEnd = 0.105f;
+        //
+        // The four count columns are one width: 130 units of the 814-unit row, which
+        // is 0.16 each. That width is set by what has to be written above them, and
+        // it was measured off a screenshot rather than guessed -- Besiege's font is
+        // wide and letter-spaced, and nothing about it can be asked before the window
+        // exists. "CHANGED ▲▼" is 76 units at the header size; the column gives up 23
+        // of its own to the swatch and the gaps either side, so 130 leaves about 15
+        // units of air on each side of the longest heading.
+        //
+        // The two on the left are in the same units: 109 for the number and the
+        // picture, 185 for the name and the time, which is what a timestamp needs.
+        private const float ThumbEnd = 0.134f;
         private const float ThumbInset = 5f;
-        private const float StampEnd = 0.460f;
-        private const float AddedEnd = 0.640f;
-        private const float ChangedEnd = 0.820f;
+        private const float StampEnd = 0.361f;
+        private const float BlocksEnd = 0.521f;
+        private const float AddedEnd = 0.680f;
+        private const float ChangedEnd = 0.840f;
         private const float PadLeft = 9f;
         private const float PadRight = 13f;
+
+        // The version's place in the history, left of its thumbnail, which is also
+        // the button that pins it. In pixels rather than as a fraction of the row:
+        // it holds two digits for most machines and three for a well-worn one, and
+        // nothing else, so there is nothing for extra width to do.
+        private const float NumberWidth = 44f;
+        private const float NumberHeight = 42f;
+        private const float NumberGap = 6f;
+        private const int NumberFontSize = 20;
 
         // What turns a banded table into a stack of Besiege buttons: a margin
         // either side of a row and a gap between one row and the next.
@@ -61,10 +148,43 @@ namespace GitView
         private const float RowGap = 6f;
         private const float HeaderGap = 3f;
 
+        /// <summary>
+        /// The thumbnail's side. Square by construction rather than by a number
+        /// that has to be kept in step with the row's height: Besiege writes them
+        /// 512x512, and a rectangle of any other proportion visibly squashes one.
+        /// </summary>
+        private const float ThumbSize = RowHeight - RowGap - ThumbInset * 2f;
+
+        /// <summary>
+        /// Where the source column ends: the right edge of the thumbnail, which is
+        /// the last thing in it. Its heading is measured against this, so the two
+        /// cannot come apart.
+        /// </summary>
+        private const float SourceEnd = PadLeft + NumberWidth + NumberGap + ThumbSize;
+
         // The colour swatch that opens a column's picker, and the room it takes out
-        // of that column's heading.
-        private const float SwatchWidth = 24f;
-        private const float SwatchGap = 3f;
+        // of that column's heading. Every unit here is a unit the heading does not
+        // get, so it is as small as it can be and still be worth aiming at.
+        private const float SwatchWidth = 18f;
+        private const float SwatchGap = 2f;
+
+        /// <summary>
+        /// Where the time heading gives way to the name heading, as a fraction of
+        /// the row. Near enough the middle of the column they share; the exact place
+        /// is chosen so the two headings come out the same width once the swatch has
+        /// taken its bite out of the left-hand one.
+        /// </summary>
+        private const float TimeEnd = 0.248f;
+
+        // The frame that marks the row being shown: how thick its bars are and how
+        // far inside the row's edge they sit. The inset matters for more than a
+        // margin -- a row is a rounded rectangle, and a frame drawn hard against its
+        // edge would have square corners sticking out past the rounded ones.
+        private const float EdgeThickness = 2f;
+        private const float EdgeInset = 3f;
+
+        /// <summary>How far the pin's block of colour sits inside its button.</summary>
+        private const float PinInset = 3f;
 
         private static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
         private static readonly Color ClearTint = new Color(1f, 1f, 1f, 0f);
@@ -101,6 +221,17 @@ namespace GitView
         private List<VersionEntry> _versions = new List<VersionEntry>();
         private string _machineName = string.Empty;
         private GameObject _window;
+        private RectTransform _windowRect;
+
+        /// <summary>Where the window was last known to be, so a drag can be noticed.</summary>
+        private Vector2 _placed;
+
+        /// <summary>Something worth storing has changed since the last flush.</summary>
+        private bool _dirty;
+
+        /// <summary>When the overlay may next be redrawn. See RedrawOverlay.</summary>
+        private float _redrawAt;
+
         private ScrollRect _scroll;
         private RectTransform _content;
         private RectTransform _viewport;
@@ -109,11 +240,33 @@ namespace GitView
         private readonly ColourPicker[] _pickers = new ColourPicker[DiffPalette.Categories];
         private readonly Image[] _swatches = new Image[DiffPalette.Categories];
 
+        /// <summary>
+        /// The button each swatch is drawn on, kept for the outside-click check: a
+        /// click on one of these is the thing that opens and closes a picker, so it
+        /// must not also count as a click somewhere else.
+        /// </summary>
+        private readonly RectTransform[] _swatchButtons =
+            new RectTransform[DiffPalette.Categories];
+
+        /// <summary>
+        /// The version everything is compared against, or null for "the one
+        /// before". The player sets it with a row's pin button.
+        /// </summary>
+        private VersionEntry _base;
+
         private int _sortColumn = RowSort.ByTime;
         private bool _ascending;
         private int _selected = -1;
         private bool _built;
         private bool _counting;
+
+        /// <summary>
+        /// Which counting pass is the current one. A pass reads a file a frame and
+        /// takes about a second over a long history, which is plenty of time for the
+        /// player to change what the counts are measured from; the older pass checks
+        /// this and gives up rather than writing numbers nobody asked for any more.
+        /// </summary>
+        private int _countPass;
 
         /// <summary>
         /// Whether the player has the window open -- which is not the same as
@@ -143,6 +296,9 @@ namespace GitView
             _machineName = machineName;
             _versions = versions ?? new List<VersionEntry>();
             _selected = -1;
+            // A pin belongs to the history it was set in; another machine's versions
+            // are not something to compare this one against.
+            _base = null;
             _ghosts.Clear();
 
             RowSort.Apply(_versions, _sortColumn, _ascending);
@@ -186,6 +342,11 @@ namespace GitView
         public void SetVisible(bool visible)
         {
             _wanted = visible;
+            if (!visible)
+            {
+                ClosePickers();
+                Store();
+            }
             Apply();
         }
 
@@ -222,7 +383,16 @@ namespace GitView
         }
 
         /// <summary>
-        /// True while the game has a menu up or the player has hidden the HUD.
+        /// True while there is nothing for the window to be over: a menu is up, the
+        /// HUD is hidden, or the player has left the build area altogether for the
+        /// main menu, the level selector or a level that is still loading.
+        ///
+        /// The window and its canvas outlive scene loads -- they have to, or the
+        /// history would be lost every time a level was opened -- so nothing stops
+        /// them being drawn over the main menu unless it is checked for.
+        /// <c>Machine.Active()</c> is the check that matters and the one that needs
+        /// no list of scene names: it is the machine the window is describing, and
+        /// outside a build area there is not one.
         ///
         /// <c>StatMaster</c> is not part of the stable Modding namespace and can
         /// change without notice, so a failure here means "not busy" -- a window
@@ -230,9 +400,14 @@ namespace GitView
         /// </summary>
         private static bool GameIsBusy()
         {
+            if (Machine.Active() == null)
+            {
+                return true;
+            }
             try
             {
-                return StatMaster.inMenu || StatMaster.hudHidden;
+                return StatMaster.inMenu || StatMaster.hudHidden
+                    || StatMaster.isMainMenu || StatMaster.isLoadingLevels;
             }
             catch (Exception)
             {
@@ -249,7 +424,136 @@ namespace GitView
             if (_built)
             {
                 Apply();
+                NotePosition();
+                RedrawOverlay();
+                CloseOnOutsideClick();
             }
+        }
+
+        /// <summary>
+        /// Puts an open picker away when the player clicks anywhere that is not it.
+        ///
+        /// Read off the mouse rather than caught by an invisible panel behind the
+        /// picker, which is how this is usually done and cannot work here: the
+        /// picker lives inside the window, so a catcher big enough to hear a click
+        /// out in the world would have to be somewhere the picker could never be
+        /// drawn on top of. A screen point is answerable wherever it lands.
+        ///
+        /// Clicks on a swatch are left alone, because a swatch is the thing that
+        /// opens and closes a picker. Whether its own handler has run yet when this
+        /// does depends on script execution order, and either way round the click
+        /// would otherwise be counted twice -- closing the panel here and reopening
+        /// it there, or the reverse.
+        ///
+        /// Left button only. The right one turns the camera, and a colour is often
+        /// exactly the thing you want to turn the camera to look at.
+        /// </summary>
+        private void CloseOnOutsideClick()
+        {
+            if (!Input.GetMouseButtonDown(0))
+            {
+                return;
+            }
+            Vector2 point = Input.mousePosition;
+            for (int i = 0; i < _pickers.Length; i++)
+            {
+                if (_pickers[i] != null && _pickers[i].Contains(point))
+                {
+                    return;
+                }
+            }
+            for (int i = 0; i < _swatchButtons.Length; i++)
+            {
+                if (_swatchButtons[i] != null &&
+                    RectTransformUtility.RectangleContainsScreenPoint(_swatchButtons[i],
+                                                                      point, null))
+                {
+                    return;
+                }
+            }
+            ClosePickers();
+        }
+
+        /// <summary>
+        /// Puts the overlay back after a level change.
+        ///
+        /// The shells hang off the transform the machine's blocks are parented to,
+        /// and loading a level destroys and rebuilds all of it -- so a diff being
+        /// shown when the player opens another level is simply gone, while the
+        /// window listing it is still there saying otherwise. Besiege carries the
+        /// machine across, so the diff is still true of it; only the objects
+        /// drawing it were lost.
+        ///
+        /// Retried on a timer rather than every frame because the first attempts
+        /// after a level change will fail: the machine exists before its blocks do,
+        /// and there is nothing to parent to until they arrive.
+        /// </summary>
+        private void RedrawOverlay()
+        {
+            if (!_ghosts.Lost || GameIsBusy())
+            {
+                return;
+            }
+            Machine machine = Machine.Active();
+            if (machine == null || machine.IsLoadingMachine || Time.unscaledTime < _redrawAt)
+            {
+                return;
+            }
+            // Waited for rather than assumed: the machine object exists before its
+            // blocks do, and the shells are parented to whatever the blocks are
+            // parented to. Drawing early would hang them off the machine's own
+            // transform, which is a different place.
+            if (machine.BuildingBlocks == null || machine.BuildingBlocks.Count == 0)
+            {
+                return;
+            }
+            _redrawAt = Time.unscaledTime + RedrawInterval;
+            _ghosts.Restore();
+        }
+
+        /// <summary>
+        /// Notices the window being dragged.
+        ///
+        /// Polled rather than hooked, for the same reason as the menu check and one
+        /// more: the drag is UI Factory's, on a component of its window prefab, and
+        /// it reports nothing. Where the rect ended up is the only account of it
+        /// there is.
+        /// </summary>
+        private void NotePosition()
+        {
+            if (_windowRect == null || !_window.activeSelf)
+            {
+                return;
+            }
+            Vector2 now = _windowRect.anchoredPosition;
+            if ((now - _placed).sqrMagnitude < MovedEnough * MovedEnough)
+            {
+                return;
+            }
+            _placed = now;
+            _dirty = true;
+            Prefs.SetWindow(now);
+        }
+
+        /// <summary>
+        /// Puts anything changed since the last call on disk. Called when the
+        /// player is finished with something -- a picker closed, the window hidden,
+        /// the game quit -- rather than as it changes, since a drag or a slider
+        /// changes it many times a second and none of those are the answer.
+        /// </summary>
+        private void Store()
+        {
+            if (!_dirty)
+            {
+                return;
+            }
+            _dirty = false;
+            Prefs.Flush();
+        }
+
+        private void OnApplicationQuit()
+        {
+            Store();
         }
 
         private void BuildAndFill()
@@ -275,6 +579,7 @@ namespace GitView
 
         private void OnDestroy()
         {
+            Store();
             _ghosts.Clear();
             DropThumbnails();
         }
@@ -297,9 +602,19 @@ namespace GitView
                 return;
             }
 
-            RectTransform windowRect = UIF.Rect(_window);
-            windowRect.sizeDelta = new Vector2(WindowWidth, WindowHeight);
-            windowRect.anchoredPosition = new Vector2(0f, 0f);
+            _windowRect = UIF.Rect(_window);
+            // Anchored and pivoted in the middle by us rather than however the
+            // prefab was authored, so that a stored position means one thing: an
+            // offset in canvas units from the middle of the screen. Anything else
+            // and a remembered position depends on a prefab we do not own.
+            _windowRect.anchorMin = new Vector2(0.5f, 0.5f);
+            _windowRect.anchorMax = new Vector2(0.5f, 0.5f);
+            _windowRect.pivot = new Vector2(0.5f, 0.5f);
+            _windowRect.sizeDelta = new Vector2(WindowWidth, WindowHeight);
+
+            Canvas.ForceUpdateCanvases();
+            _windowRect.anchoredPosition = Fit(Prefs.Window(WindowHome));
+            _placed = _windowRect.anchoredPosition;
 
             HookCloseButton();
             if (!FindScrollView())
@@ -309,6 +624,29 @@ namespace GitView
             BuildHeader();
             BuildStatusLine();
             _built = true;
+        }
+
+        /// <summary>
+        /// Keeps a position on screen.
+        ///
+        /// Worth doing even for the default: the canvas matches on height, so a
+        /// screen narrower than 16:9 has fewer canvas units across than the layout
+        /// assumes. It matters more for a stored one -- the position is remembered
+        /// across sessions, and nothing stops the player changing resolution or
+        /// monitor between them, which would otherwise leave the window remembered
+        /// somewhere off the edge with no way back to it.
+        /// </summary>
+        private Vector2 Fit(Vector2 at)
+        {
+            RectTransform canvas = _windowRect.parent as RectTransform;
+            if (canvas == null || canvas.rect.width <= 0f)
+            {
+                return at;
+            }
+            float slackX = Mathf.Max(0f, (canvas.rect.width - WindowWidth) * 0.5f);
+            float slackY = Mathf.Max(0f, (canvas.rect.height - WindowHeight) * 0.5f);
+            return new Vector2(Mathf.Clamp(at.x, -slackX, slackX),
+                               Mathf.Clamp(at.y, -slackY, slackY));
         }
 
         private void SetTitle(string title)
@@ -394,29 +732,85 @@ namespace GitView
             // margin or every heading sits a few pixels left of its column.
             rect.sizeDelta = new Vector2(rect.sizeDelta.x - RowMargin * 2f, HeaderHeight);
 
-            _headers[RowSort.ByTime] = HeaderButton(rect, RowSort.ByTime, ThumbEnd, StampEnd);
-            _headers[RowSort.ByAdded] = HeaderButton(rect, RowSort.ByAdded, StampEnd, AddedEnd);
+            // The one column of text, under two headings: what a row is called and
+            // when it was saved are two different orders to want it in, and the row
+            // writes both -- the name on the first line, the time on the second.
+            _headers[RowSort.ByTime] = HeaderButton(rect, RowSort.ByTime, ThumbEnd,
+                                                    TimeEnd);
+            _headers[RowSort.ByName] = HeaderButton(rect, RowSort.ByName, TimeEnd,
+                                                    StampEnd);
+            _headers[RowSort.ByBlocks] = HeaderButton(rect, RowSort.ByBlocks, StampEnd,
+                                                      BlocksEnd);
+            _headers[RowSort.ByAdded] = HeaderButton(rect, RowSort.ByAdded, BlocksEnd,
+                                                     AddedEnd);
             _headers[RowSort.ByChanged] = HeaderButton(rect, RowSort.ByChanged, AddedEnd,
                                                        ChangedEnd);
             _headers[RowSort.ByRemoved] = HeaderButton(rect, RowSort.ByRemoved, ChangedEnd, 1f);
 
+            SourceHeading(rect);
+
             // Built after the headings so a swatch draws over the button it is
-            // notched into rather than under it.
-            Swatch(rect, CategoryOf(RowSort.ByAdded), StampEnd);
-            Swatch(rect, CategoryOf(RowSort.ByChanged), AddedEnd);
-            Swatch(rect, CategoryOf(RowSort.ByRemoved), ChangedEnd);
+            // notched into rather than under it. The unchanged colour heads the
+            // blocks column: it is the colour of a block that a save left alone, and
+            // that column is how many blocks there are to leave alone.
+            Swatch(rect, DiffPalette.Unchanged, StampEnd, HeaderGap);
+            Swatch(rect, DiffPalette.Added, BlocksEnd, HeaderGap);
+            Swatch(rect, DiffPalette.Changed, AddedEnd, HeaderGap);
+            Swatch(rect, DiffPalette.Removed, ChangedEnd, HeaderGap);
         }
 
         /// <summary>
-        /// The little block of colour at the left of a count column, which opens
-        /// that colour's picker.
+        /// The name of the leftmost column: the version's number, its picture, and
+        /// the button that makes it the version everything is compared with.
+        ///
+        /// Across the whole column -- the numbers and the pictures beside them --
+        /// rather than over the numbers alone, which is where it started and where
+        /// it would not fit. "SOURCE ▲▼" is wider than a strip sized for two
+        /// digits, and a heading centred on that strip has to hang off both ends of
+        /// its own button to be centred at all; there is nothing to the left of it
+        /// but the window's edge, so the room it needs can only come from the
+        /// right. Taking the picture in too is what makes the button wide enough
+        /// for the word to sit inside it with air around it, at every width the
+        /// window can be dragged to, since both are measured in pixels.
+        /// </summary>
+        private void SourceHeading(RectTransform parent)
+        {
+            GameObject button = UIF.Spawn(UIF.ButtonPrefab, parent);
+            if (button == null)
+            {
+                return;
+            }
+
+            // In pixels, like the number strip and the thumbnail it sits over,
+            // rather than as a fraction of the row -- a fraction would drift off
+            // them as the window's width changed and they did not.
+            RectTransform rect = UIF.Rect(button);
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.offsetMin = new Vector2(PadLeft, HeaderGap);
+            rect.offsetMax = new Vector2(SourceEnd, -HeaderGap);
+
+            _headers[RowSort.ByNumber] = Heading(button, RowSort.ByNumber);
+        }
+
+        /// <summary>
+        /// The little block of colour at the left of a column, which opens that
+        /// colour's picker.
         ///
         /// Beside the heading rather than in a settings panel of its own because
         /// the colour has no meaning away from the column: it is what "+4" is
         /// written in and what the blocks behind it are drawn in, and being able to
-        /// see all three at once is most of what makes them choosable.
+        /// see all four at once is most of what makes them choosable.
+        ///
+        /// The SAVED column carries the fourth, for the blocks a save left alone.
+        /// It has no count to be the colour of -- there is no column of unchanged
+        /// blocks and no use for one -- but it is the same kind of choice as the
+        /// other three and belongs in the same row of them. Drawn at full opacity
+        /// like the rest, so a colour turned off is still something to click.
         /// </summary>
-        private void Swatch(RectTransform parent, int category, float columnStart)
+        private void Swatch(RectTransform parent, int category, float columnStart,
+                            float left)
         {
             GameObject button = UIF.Spawn(UIF.ButtonPrefab, parent);
             if (button == null)
@@ -426,11 +820,14 @@ namespace GitView
             button.name = "Swatch " + DiffPalette.Name(category);
 
             RectTransform rect = UIF.Rect(button);
+            // As tall as the headings beside it. It used to be inset by two units
+            // more, which left the four of them looking like a different row of
+            // controls from the buttons they belong to.
             rect.anchorMin = new Vector2(columnStart, 0f);
             rect.anchorMax = new Vector2(columnStart, 1f);
             rect.pivot = new Vector2(0f, 0.5f);
-            rect.offsetMin = new Vector2(HeaderGap, HeaderGap + 2f);
-            rect.offsetMax = new Vector2(HeaderGap + SwatchWidth, -(HeaderGap + 2f));
+            rect.offsetMin = new Vector2(left, HeaderGap);
+            rect.offsetMax = new Vector2(left + SwatchWidth, -HeaderGap);
 
             Text spare = button.GetComponentInChildren<Text>(true);
             if (spare != null)
@@ -444,6 +841,7 @@ namespace GitView
             _swatches[category] = fill;
 
             UIF.NoSwell(button);
+            _swatchButtons[category] = rect;
             int captured = category;
             UIF.OnClick(button, delegate { TogglePicker(captured, rect); });
         }
@@ -456,13 +854,7 @@ namespace GitView
         private void TogglePicker(int category, RectTransform under)
         {
             bool wasOpen = _pickers[category] != null && _pickers[category].Visible;
-            for (int i = 0; i < _pickers.Length; i++)
-            {
-                if (_pickers[i] != null)
-                {
-                    _pickers[i].Close();
-                }
-            }
+            ClosePickers();
             if (wasOpen)
             {
                 return;
@@ -478,6 +870,28 @@ namespace GitView
         }
 
         /// <summary>
+        /// Shuts every picker and writes down anything they changed. Putting one
+        /// away is the moment a colour is settled on, which is the moment worth
+        /// reaching the disk for.
+        /// </summary>
+        private void ClosePickers()
+        {
+            bool any = false;
+            for (int i = 0; i < _pickers.Length; i++)
+            {
+                if (_pickers[i] != null && _pickers[i].Visible)
+                {
+                    _pickers[i].Close();
+                    any = true;
+                }
+            }
+            if (any)
+            {
+                Store();
+            }
+        }
+
+        /// <summary>
         /// Takes a colour the player has just changed through to everything drawn
         /// in it: the counts in the list, the swatch on the heading, and the shells
         /// over the machine.
@@ -490,6 +904,9 @@ namespace GitView
             }
             Restyle();
             _ghosts.Refresh();
+            // DiffPalette has already stored the colour; this is what says there is
+            // something to flush when the picker is put away.
+            _dirty = true;
         }
 
         /// <summary>
@@ -515,14 +932,17 @@ namespace GitView
                 return null;
             }
             // Gapped like the rows, so the headings read as the same family of
-            // buttons rather than as one bar chopped into pieces. The three count
-            // columns give up the width of a swatch on their left; the values under
-            // them stay centred in the whole column, which is what they are counts
-            // of -- the swatch belongs to the column, not to the heading.
-            float insetLeft = HasSwatch(column)
-                ? HeaderGap + SwatchWidth + SwatchGap : HeaderGap;
-            UIF.Span(UIF.Rect(button), from, to, insetLeft, HeaderGap);
+            // buttons rather than as one bar chopped into pieces. Every column
+            // gives up the width of a swatch on its left, and the saved column one
+            // more for the clock; the values under them stay where they are, since
+            // those belong to the column rather than to the heading.
+            UIF.Span(UIF.Rect(button), from, to, Inset(column), HeaderGap);
+            return Heading(button, column);
+        }
 
+        /// <summary>The parts of a heading that are the same wherever it is placed.</summary>
+        private Text Heading(GameObject button, int column)
+        {
             Text label = UIF.Caption(button, RowSort.ColumnName(column), HeaderFontSize,
                                      TextAnchor.MiddleCenter);
             if (label != null)
@@ -541,18 +961,17 @@ namespace GitView
         }
 
         /// <summary>
-        /// True for the three columns that are a colour as well as a count. Their
-        /// sort order matches the palette's, one apart, since SAVED is a column and
-        /// not a category.
+        /// How far a heading is pushed off the left edge of its column by the
+        /// controls that live there.
         /// </summary>
-        private static bool HasSwatch(int column)
+        private static float Inset(int column)
         {
-            return column >= RowSort.ByAdded && column <= RowSort.ByRemoved;
-        }
-
-        private static int CategoryOf(int column)
-        {
-            return column - RowSort.ByAdded;
+            // The four columns of numbers each begin with the swatch that colours
+            // them. The time and the name share a column between them and have no
+            // colour of their own, so their headings start at the edge.
+            bool swatched = column == RowSort.ByBlocks || column == RowSort.ByAdded ||
+                            column == RowSort.ByChanged || column == RowSort.ByRemoved;
+            return swatched ? HeaderGap + SwatchWidth + SwatchGap : HeaderGap;
         }
 
         private void BuildStatusLine()
@@ -647,25 +1066,28 @@ namespace GitView
             }
 
             // Opaque white, and left that way. uGUI's colour transition multiplies
-            // the state's colour by the graphic's own, so an image that starts
+            // the state's colour by the graphic's own, so an image created
             // transparent stays invisible whatever it is told to become -- which is
-            // exactly how the selected row lost its red.
+            // exactly how the hover veil lost its first attempt at a colour.
             row.Highlight = UIBuild.AddImage(row.Rect, "Selected", Color.white);
             UIF.Stretch(row.Highlight.rectTransform, 0f, 0f);
             row.Highlight.raycastTarget = false;
             row.Highlight.transform.SetAsFirstSibling();
 
-            // Square, and sized in pixels rather than as a fraction of the row:
-            // Besiege's autosave thumbnails are 512x512, and stretching one to fill
-            // a column that is wider than the row is tall visibly squashes it.
+            // Above the highlight and below everything with words on it.
+            BuildEdges(row);
+            BuildNumber(row);
+
+            // Sized in pixels rather than as a fraction of the row, so that it stays
+            // square whatever the window is doing.
             row.Thumbnail = UIBuild.AddRawImage(row.Rect, "Thumb");
             RectTransform thumb = row.Thumbnail.rectTransform;
+            float thumbLeft = PadLeft + NumberWidth + NumberGap;
             thumb.anchorMin = new Vector2(0f, 0f);
             thumb.anchorMax = new Vector2(0f, 1f);
             thumb.pivot = new Vector2(0f, 0.5f);
-            thumb.offsetMin = new Vector2(PadLeft, ThumbInset);
-            thumb.offsetMax = new Vector2(PadLeft + RowHeight - ThumbInset * 2f - 2f,
-                                          -ThumbInset);
+            thumb.offsetMin = new Vector2(thumbLeft, ThumbInset);
+            thumb.offsetMax = new Vector2(thumbLeft + ThumbSize, -ThumbInset);
             row.Thumbnail.raycastTarget = false;
 
             // The counts are centred under centred headings -- see HeaderButton for
@@ -674,17 +1096,191 @@ namespace GitView
             // and read as a list rather than as a column of figures, so they line
             // up on the left, next to the thumbnails. Their heading stays centred
             // over the column like the rest.
-            row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd, TextAnchor.MiddleLeft);
-            row.Added = Cell(row.Rect, "Added", StampEnd, AddedEnd, TextAnchor.MiddleCenter);
+            row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd, TextAnchor.MiddleLeft,
+                             RowFontSize);
+            row.Blocks = Cell(row.Rect, "Blocks", StampEnd, BlocksEnd,
+                              TextAnchor.MiddleCenter, CountFontSize);
+            row.Added = Cell(row.Rect, "Added", BlocksEnd, AddedEnd,
+                             TextAnchor.MiddleCenter, CountFontSize);
             row.Changed = Cell(row.Rect, "Changed", AddedEnd, ChangedEnd,
-                               TextAnchor.MiddleCenter);
-            row.Removed = Cell(row.Rect, "Removed", ChangedEnd, 1f, TextAnchor.MiddleCenter);
+                               TextAnchor.MiddleCenter, CountFontSize);
+            row.Removed = Cell(row.Rect, "Removed", ChangedEnd, 1f,
+                               TextAnchor.MiddleCenter, CountFontSize);
 
             HistoryRow captured = row;
             row.Button = UIF.OnClick(row.Root, delegate { Choose(captured); });
-            // Before anything can see the white above.
-            Tint(row, false);
+
+            // Wired once, because it no longer depends on anything: the highlight is
+            // the pointer's veil and nothing else, whether this row is the chosen
+            // one or not. Before anything can see the white it was created with.
+            UIF.HoverTint(row.Button, row.Highlight, ClearTint, HoverFill, PressFill);
             return row;
+        }
+
+        /// <summary>
+        /// The version's number, which is also the button that pins it as the one
+        /// every other version is compared against.
+        ///
+        /// The number and the pin were two things side by side and are now one,
+        /// which is what they were always saying: a version is picked out of the
+        /// history by its number, and pinning it is picking it out. It also gives
+        /// the button something written on it, which a blank square never had.
+        ///
+        /// A button of UI Factory's rather than one drawn here, so it hovers,
+        /// presses and rounds its corners like every other button in the game. A
+        /// button inside a button works out on its own: uGUI hands a click to the
+        /// innermost thing that handles it, so pinning a row does not also load it.
+        /// </summary>
+        private void BuildNumber(HistoryRow row)
+        {
+            GameObject number = UIF.Spawn(UIF.ButtonPrefab, row.Rect);
+            if (number == null)
+            {
+                // Without the prefab the number still has to be readable; it just
+                // cannot be pinned.
+                row.Number = Pixels(row.Rect, "Number", PadLeft, PadLeft + NumberWidth,
+                                    NumberFontSize, TextAnchor.MiddleCenter);
+                return;
+            }
+            number.name = "Number";
+
+            RectTransform rect = UIF.Rect(number);
+            rect.anchorMin = new Vector2(0f, 0.5f);
+            rect.anchorMax = new Vector2(0f, 0.5f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.sizeDelta = new Vector2(NumberWidth, NumberHeight);
+            rect.anchoredPosition = new Vector2(PadLeft, 0f);
+
+            // Marked with an image of ours inside the button rather than by tinting
+            // the button's own background, which was the first attempt and did
+            // nothing visible at all. UIFactory's graphics can carry a
+            // CustomMaterialHandler -- "forces the image to use a custom shader
+            // material instead of the default one" -- and a shader that does not
+            // multiply by the renderer's colour cannot be tinted, the same way a
+            // slot button in the load screen cannot be repainted by setting its
+            // texture. A plain uGUI Image on the default UI shader takes a colour,
+            // which is what the column swatches have been doing all along.
+            row.PinFill = UIBuild.AddImage(rect, "Fill", ClearTint);
+            UIF.Stretch(row.PinFill.rectTransform, PinInset, PinInset);
+            row.PinFill.raycastTarget = false;
+            // In front of the button's own face, which is the root's graphic and so
+            // always draws first, and behind the number, which is a later child.
+            row.PinFill.transform.SetAsFirstSibling();
+
+            // Borrowed if there is one: the button's rounded corners live in its
+            // sprite, so the mark drawn with the same sprite is the same shape.
+            // Without one it is a square inside a rounded button, which is what the
+            // column swatches are and looks deliberate enough.
+            Image face = number.GetComponent<Image>();
+            if (face != null && face.sprite != null)
+            {
+                row.PinFill.sprite = face.sprite;
+                row.PinFill.type = face.type;
+            }
+
+            row.Number = UIF.Caption(number, string.Empty, NumberFontSize,
+                                     TextAnchor.MiddleCenter);
+            if (row.Number != null)
+            {
+                // The prefab's label is authored for the prefab's own width, so it
+                // has to be stretched to the size this was resized to.
+                UIF.StretchInset(row.Number.rectTransform, 0f, 0f, 0f);
+                row.Number.raycastTarget = false;
+            }
+
+            HistoryRow captured = row;
+            row.Pin = UIF.OnClick(number, delegate { TogglePin(captured); });
+        }
+
+        /// <summary>
+        /// The four bars that frame the row being shown.
+        ///
+        /// A frame rather than a filled row. Filling it red is what Besiege does to
+        /// a chosen option on its own panels, and it works there because those are
+        /// short buttons with one word on them. A row here is a thumbnail, a
+        /// timestamp and three counts written in three colours of their own, and a
+        /// strong red behind all of that leaves the one row that matters most the
+        /// hardest one to read. An outline says the same thing and changes nothing
+        /// inside it.
+        ///
+        /// Inset from the row's edge rather than drawn along it, because a row is a
+        /// rounded rectangle: a frame flush with its edge would have square corners
+        /// standing outside the rounded ones. Three units in, against a corner
+        /// radius of about five, puts them back inside the shape.
+        /// </summary>
+        private static void BuildEdges(HistoryRow row)
+        {
+            float near = EdgeInset;
+            float far = EdgeInset + EdgeThickness;
+            row.Edges = new Image[4];
+            row.Edges[0] = Edge(row.Rect, "EdgeTop",
+                                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                                new Vector2(near, -far), new Vector2(-near, -near));
+            row.Edges[1] = Edge(row.Rect, "EdgeBottom",
+                                new Vector2(0f, 0f), new Vector2(1f, 0f),
+                                new Vector2(near, near), new Vector2(-near, far));
+            row.Edges[2] = Edge(row.Rect, "EdgeLeft",
+                                new Vector2(0f, 0f), new Vector2(0f, 1f),
+                                new Vector2(near, near), new Vector2(far, -near));
+            row.Edges[3] = Edge(row.Rect, "EdgeRight",
+                                new Vector2(1f, 0f), new Vector2(1f, 1f),
+                                new Vector2(-far, near), new Vector2(-near, -near));
+        }
+
+        private static Image Edge(RectTransform row, string name, Vector2 anchorMin,
+                                  Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
+        {
+            Image bar = UIBuild.AddImage(row, name, ClearTint);
+            RectTransform rect = bar.rectTransform;
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.offsetMin = offsetMin;
+            rect.offsetMax = offsetMax;
+            bar.raycastTarget = false;
+            return bar;
+        }
+
+        /// <summary>
+        /// Pins a version as the one to compare against, or unpins it.
+        ///
+        /// One or none, because it is one comparison: a diff has two sides, and the
+        /// far side is either a version the player chose or the one before in time.
+        /// Pinning a second version replaces the first rather than adding to it.
+        /// </summary>
+        private void TogglePin(HistoryRow row)
+        {
+            if (row == null || row.Entry == null)
+            {
+                return;
+            }
+            _base = _base == row.Entry ? null : row.Entry;
+            Restyle();
+            // The diff on screen was measured against something that is no longer
+            // what this is compared with, so it is worked out again -- without
+            // reloading the machine, which has not changed.
+            if (_selected >= 0 && _selected < _versions.Count)
+            {
+                ShowDiff(_versions[_selected]);
+            }
+            // And so is every count in the list, which answers the same question a
+            // row at a time.
+            Recount();
+        }
+
+        /// <summary>
+        /// Marks a pin, or puts it back the way the prefab had it.
+        ///
+        /// Red because that is what Besiege marks a chosen thing with, and the same
+        /// red the chosen row is filled with -- one row is the version being looked
+        /// at, one pin is what it is being looked at against.
+        /// </summary>
+        private static void MarkPin(HistoryRow row, bool pinned)
+        {
+            if (row.PinFill != null)
+            {
+                row.PinFill.color = pinned ? SelectedFill : ClearTint;
+            }
         }
 
         /// <summary>
@@ -696,20 +1292,53 @@ namespace GitView
         /// mod's. Falls back to a plain label if UIFactory cannot supply one, so a
         /// row is never simply missing.
         /// </summary>
+        /// <summary>
+        /// A label pinned to the left of a row in pixels rather than across a
+        /// fraction of it. The number strip and the thumbnail beside it are fixed
+        /// sizes -- a two-digit number does not want more room on a wider window,
+        /// and a square thumbnail cannot have any.
+        /// </summary>
+        private static Text Pixels(RectTransform row, string name, float from, float to,
+                                   int fontSize, TextAnchor alignment)
+        {
+            GameObject spawned = UIF.Spawn(UIF.TextPrefab, row);
+            Text label = spawned == null
+                ? UIBuild.AddText(row, name, fontSize, alignment)
+                : UIF.Label(spawned, fontSize, alignment);
+            if (label == null)
+            {
+                return null;
+            }
+            if (spawned != null)
+            {
+                spawned.name = name;
+            }
+
+            RectTransform rect = label.rectTransform;
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 0.5f);
+            rect.offsetMin = new Vector2(from, 0f);
+            rect.offsetMax = new Vector2(to, 0f);
+            label.raycastTarget = false;
+            label.text = string.Empty;
+            return label;
+        }
+
         private static Text Cell(RectTransform row, string name, float from, float to,
-                                 TextAnchor alignment)
+                                 TextAnchor alignment, int fontSize)
         {
             GameObject spawned = UIF.Spawn(UIF.TextPrefab, row);
             if (spawned == null)
             {
-                Text plain = UIBuild.AddText(row, name, RowFontSize, alignment);
+                Text plain = UIBuild.AddText(row, name, fontSize, alignment);
                 UIF.Span(plain.rectTransform, from, to, PadLeft, PadRight);
                 return plain;
             }
 
             spawned.name = name;
             UIF.Span(UIF.Rect(spawned), from, to, PadLeft, PadRight);
-            Text label = UIF.Label(spawned, RowFontSize, alignment);
+            Text label = UIF.Label(spawned, fontSize, alignment);
             if (label != null)
             {
                 label.raycastTarget = false;
@@ -726,58 +1355,60 @@ namespace GitView
             }
             row.Entry = entry;
             row.Rect.anchoredPosition = new Vector2(0f, -index * RowHeight);
-            Repaint(row, entry, index == _selected);
+            Repaint(row, entry, index == _selected, entry == _base);
         }
 
         /// <summary>
         /// Colours a row for what it is and whether it is the one being shown.
         ///
-        /// Only the background says which row is chosen. The text is the same on
-        /// every row -- the counts in their own colours, the timestamp quiet -- so
-        /// that a column means one thing all the way down and the chosen row is not
-        /// also the one row whose numbers are written differently from the rest.
+        /// Only the frame around it says which row is chosen. The text is the same
+        /// on every row -- the counts in their own colours, the timestamp quiet --
+        /// so that a column means one thing all the way down and the chosen row is
+        /// not also the one row whose numbers are written differently from the rest.
         ///
         /// A manual save is marked by the word SAVED after its timestamp and by
         /// nothing else. It used to be written in white as well, which made it look
         /// selected.
         /// </summary>
-        private static void Repaint(HistoryRow row, VersionEntry entry, bool chosen)
+        private void Repaint(HistoryRow row, VersionEntry entry, bool chosen,
+                             bool pinned)
         {
             Tint(row, chosen);
-            row.Stamp.text = entry.Stamp() + (entry.Manual ? "    SAVED" : string.Empty);
+            MarkPin(row, pinned);
+            if (row.Number != null)
+            {
+                row.Number.text = entry.Number > 0 ? entry.Number.ToString() : string.Empty;
+                // White on the red of a pinned button, where the quiet grey the rest
+                // of the column is written in would be a grey number on red.
+                row.Number.color = pinned ? Color.white : QuietInk;
+            }
+            row.Stamp.text = entry.Lines();
             row.Stamp.color = QuietInk;
             BindCounts(row, entry);
         }
 
         /// <summary>
-        /// Fills a row's background for the two things it has to say at once: this
-        /// is the version being shown, and the pointer is over this one.
+        /// Frames the row that is the version on screen, and unframes the rest.
         ///
-        /// Driven through the button's own colour transition rather than by setting
-        /// the image, so hovering costs nothing per frame and Unity fades between
-        /// the states. The hover is a white veil over whatever is underneath, which
-        /// reads as a lift on an empty row and as a lighter red on the chosen one.
+        /// The hover veil is not touched here: it is the button's own colour
+        /// transition, wired once when the row was built, so being under the
+        /// pointer and being the chosen row are two marks that cannot get in each
+        /// other's way.
         /// </summary>
         private static void Tint(HistoryRow row, bool chosen)
         {
-            Color fill = chosen ? SelectedFill : ClearTint;
-            if (row.Button == null)
+            if (row.Edges == null)
             {
-                row.Highlight.color = fill;
                 return;
             }
-            UIF.HoverTint(row.Button, row.Highlight, fill,
-                          chosen ? Lighter(fill, 0.18f) : HoverFill,
-                          chosen ? Lighter(fill, 0.30f) : PressFill);
-        }
-
-        /// <summary>A colour with white mixed into it, its opacity untouched.</summary>
-        private static Color Lighter(Color colour, float amount)
-        {
-            return new Color(colour.r + (1f - colour.r) * amount,
-                             colour.g + (1f - colour.g) * amount,
-                             colour.b + (1f - colour.b) * amount,
-                             colour.a);
+            Color frame = chosen ? SelectedFill : ClearTint;
+            for (int i = 0; i < row.Edges.Length; i++)
+            {
+                if (row.Edges[i] != null)
+                {
+                    row.Edges[i].color = frame;
+                }
+            }
         }
 
         private void Restyle()
@@ -786,19 +1417,34 @@ namespace GitView
             {
                 if (_rows[i].Entry != null)
                 {
-                    Repaint(_rows[i], _rows[i].Entry, i == _selected);
+                    Repaint(_rows[i], _rows[i].Entry, i == _selected,
+                            _rows[i].Entry == _base);
                 }
             }
         }
 
-        private static void BindCounts(HistoryRow row, VersionEntry entry)
+        private void BindCounts(HistoryRow row, VersionEntry entry)
         {
-            if (entry.IsFirst)
+            // How big the machine is, which is a fact about the version rather than
+            // about any comparison -- so it is filled in the same way whatever the
+            // rest of the row says, including on the row that has nothing to be
+            // compared against.
+            if (row.Blocks != null)
             {
-                // Nothing before it to be a change from. Its block count is the more
-                // useful thing to show in the same space.
-                row.Added.text = entry.Counted ? entry.BlockCount + " BLOCKS" : "";
-                row.Added.color = QuietInk;
+                row.Blocks.text = entry.Counted ? entry.BlockCount.ToString() : "·";
+                row.Blocks.color = entry.Counted
+                    ? DiffPalette.Ink(DiffPalette.Unchanged) : QuietInk;
+            }
+
+            // The oldest version is only a special case while the counts are what
+            // each save did. Against a pinned source it is a comparison like any
+            // other, and so is the pinned version itself -- which comes out as three
+            // dashes, being no different from itself.
+            if (entry.IsFirst && _base == null)
+            {
+                // Nothing before it to be a change from, so nothing is written --
+                // not even a dash, which would read as "nothing changed".
+                row.Added.text = string.Empty;
                 row.Changed.text = string.Empty;
                 row.Removed.text = string.Empty;
                 return;
@@ -918,11 +1564,11 @@ namespace GitView
         private IEnumerator LoadAndShow(VersionEntry entry)
         {
             _ghosts.Clear();
-            Say("Loading " + entry.FileName + "...");
+            Say("Loading " + entry.Title() + "...");
 
             if (!VersionScan.LoadIntoWorld(entry.Path))
             {
-                Say("Could not load " + entry.FileName + ".");
+                Say("Could not load " + entry.Title() + ".");
                 yield break;
             }
 
@@ -935,24 +1581,56 @@ namespace GitView
             }
             yield return null;
 
-            VersionEntry previous = Predecessor(entry);
-            if (previous == null)
+            ShowDiff(entry);
+        }
+
+        /// <summary>
+        /// Works out what one version changed and draws it, without touching the
+        /// machine in the build area.
+        ///
+        /// Separate from loading because the two sides of a diff can change without
+        /// the machine changing: pinning a version re-answers the question about the
+        /// version already on screen, and reloading it to say so would throw the
+        /// build area away and put it back identical.
+        /// </summary>
+        private void ShowDiff(VersionEntry entry)
+        {
+            VersionEntry against = Baseline(entry);
+            if (against == null)
             {
-                Say(entry.FileName + " -- the oldest version, nothing to compare against.");
-                yield break;
+                _ghosts.Clear();
+                Say(entry.Title() + " -- the oldest version, nothing to compare against.");
+                return;
             }
 
-            MachineSnapshot before = VersionScan.Read(previous.Path);
+            MachineSnapshot before = VersionScan.Read(against.Path);
             MachineSnapshot after = VersionScan.Read(entry.Path);
             if (before == null || after == null)
             {
                 Say("Could not read one of the versions to compare.");
-                yield break;
+                return;
             }
 
+            // Nothing here cares that these two versions are next to each other or
+            // even which way round they are in time: it is two machines, and every
+            // block in the newer one that the older one does not have is an
+            // addition. A pinned base is that same comparison with one side held
+            // still.
             DiffResult diff = BlockDiff.Compare(before, after);
             _ghosts.Show(diff);
-            Say(Describe(diff) + "   vs " + previous.FileName);
+            Say(Describe(diff) + "   vs " + against.Title() +
+                (against == _base ? "  (pinned)" : string.Empty));
+        }
+
+        /// <summary>
+        /// What a version is compared against: whatever the player pinned, or the
+        /// version before it in time. A version pinned and then clicked is compared
+        /// with itself, which is a real answer -- no change -- and needs no special
+        /// case.
+        /// </summary>
+        private VersionEntry Baseline(VersionEntry entry)
+        {
+            return _base != null ? _base : Predecessor(entry);
         }
 
         private static string Describe(DiffResult diff)
@@ -1001,16 +1679,31 @@ namespace GitView
         private IEnumerator CountEverything()
         {
             _counting = true;
+            int pass = ++_countPass;
 
             List<VersionEntry> ordered = new List<VersionEntry>(_versions);
             RowSort.Apply(ordered, RowSort.ByTime, true);
 
+            // Held for the whole pass when a version is pinned: every row is then a
+            // comparison with the same machine, so it is read once instead of once
+            // per row. Null when nothing is pinned, and then `previous` walks the
+            // history a save at a time as it always did.
+            VersionEntry source = _base;
+            MachineSnapshot fixedBase = source == null ? null : VersionScan.Read(source.Path);
             MachineSnapshot previous = null;
+
             for (int i = 0; i < ordered.Count; i++)
             {
                 VersionEntry entry = ordered[i];
                 Say("Reading history... " + (i + 1) + " of " + ordered.Count);
                 yield return null;
+                // Checked after the wait rather than before it: a pin changed while
+                // this was asleep makes every count it is about to write wrong, and
+                // a newer pass is already on its way to writing the right ones.
+                if (pass != _countPass)
+                {
+                    yield break;
+                }
 
                 MachineSnapshot current = VersionScan.Read(entry.Path);
                 if (current == null)
@@ -1020,9 +1713,10 @@ namespace GitView
                 }
 
                 entry.BlockCount = current.Count;
-                if (previous != null)
+                MachineSnapshot against = fixedBase != null ? fixedBase : previous;
+                if (against != null)
                 {
-                    DiffResult diff = BlockDiff.Compare(previous, current);
+                    DiffResult diff = BlockDiff.Compare(against, current);
                     entry.Added = diff.Added.Count;
                     entry.Changed = diff.Changed.Count;
                     entry.Removed = diff.Removed.Count;
@@ -1040,7 +1734,27 @@ namespace GitView
             }
 
             _counting = false;
-            Say(ordered.Count + " versions");
+            Say(ordered.Count + " versions" +
+                (source == null ? string.Empty : "   counted against " + source.Title()));
+        }
+
+        /// <summary>
+        /// Counts the whole list again, because what the counts are measured from
+        /// has changed. Rows go back to showing nothing until their new numbers
+        /// arrive, which is honest -- the old ones were answers to a different
+        /// question -- and takes about a second for a hundred versions.
+        /// </summary>
+        private void Recount()
+        {
+            for (int i = 0; i < _versions.Count; i++)
+            {
+                _versions[i].Counted = false;
+                _versions[i].Added = 0;
+                _versions[i].Changed = 0;
+                _versions[i].Removed = 0;
+            }
+            RebuildRows();
+            StartCoroutine(CountEverything());
         }
 
         private void Say(string message)

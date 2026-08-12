@@ -32,6 +32,14 @@ namespace GitView
         public const string SliderPrefab = "Slider";
 
         /// <summary>
+        /// Besiege's text box. It carries UIFactory's
+        /// <c>StopsHotkeysWhenInputFieldFocused</c>, so typing a number into it does
+        /// not also fire the game's keyboard shortcuts -- which is the reason to use
+        /// the prefab rather than a uGUI InputField of one's own.
+        /// </summary>
+        public const string InputPrefab = "Input Field";
+
+        /// <summary>
         /// Instantiates one of UIFactory's prefabs. Returns null (and says why) if
         /// UIFactory is not ready, rather than throwing into the caller.
         /// </summary>
@@ -207,6 +215,9 @@ namespace GitView
             }
             label.alignment = alignment;
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            // A row can be two lines now -- a machine's name over its timestamp --
+            // and a prefab authored to truncate would show only the first.
+            label.verticalOverflow = VerticalWrapMode.Overflow;
             // The sort arrows are two glyphs in one label, one lit and one dimmed,
             // which needs markup.
             label.supportRichText = true;

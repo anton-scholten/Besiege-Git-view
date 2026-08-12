@@ -13,36 +13,115 @@ This mod reads that history.
 
 ## What it does
 
-In the load-machine screen, any machine with autosaves behind it gets an extra
-button. Press it and the newest version opens, with a window beside it listing
-every version of that machine:
+In the load-machine screen, go into `AutoSave` — Besiege's own versions button on
+a machine takes you there — and every machine's folder carries an extra button.
+Press it and the newest version opens, with a window beside it listing every
+version of that machine:
 
-| | saved | added | changed | removed |
-| --- | --- | --- | --- | --- |
-| *thumbnail* | 2026-06-27  15:42:38 | +11 | ~2 | — |
-| *thumbnail* | 2026-06-27  15:41:38 | +7 | — | -8 |
-| *thumbnail* | 2026-06-27  15:39:05  SAVED | +1 | ~8 | — |
+| source | | time | name | blocks | added | changed | removed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| **9** | *thumbnail* | 2026-06-27  15:42:38 | | 151 | +11 | ~2 | — |
+| **8** | *thumbnail* | 2026-06-27  15:41:38 | | 142 | +7 | — | -8 |
+| **7** | *thumbnail* | 2026-06-27  15:39:05  SAVED | | 143 | +1 | ~8 | — |
 
 Each row says what that save did to the machine compared with the save before
-it. Every heading carries a pair of arrows: the lit one is the order in force,
-so clicking a heading sorts by it and clicking again reverses it.
+it, and how big the machine was at that point. Every heading carries a pair of
+arrows: the lit one is the order in force, so clicking a heading sorts by it and
+clicking again reverses it. `source` sorts by the number, `time` by when the
+machine was saved and `name` by what it is called — which are the same order for
+one machine's history, and are not once the list holds machines you chose
+yourself. `time` and `name` head the same column, because a machine whose name is
+not just a timestamp shows that name on the first line and the timestamp under
+it.
 
-Click a row and that version loads, with its changes drawn over it:
+The number on the left is the version's place in the history — 1 is the oldest
+and the largest is the newest. It belongs to the version rather than to the row,
+so sorting by how much a save removed still leaves you able to see what came
+before what, and the `source` heading puts the list back in that order. For
+machines you chose yourself the number is the order you chose them in, which is
+what the marks in the load screen said.
+
+The number itself is a button, and pressing it pins that version as the one
+everything is compared against — the source. Normally a row is compared with the
+save before it, which is what you want for reading a history a minute at a time.
+Pin a version — its number turns red — and every version you click is compared
+with *that* one instead, so you can ask what a whole afternoon of building did
+rather than what one minute of it did. One version can be pinned, or none;
+pressing the pinned number again unpins it and the rows go back to being
+compared with the save before. The status line at the bottom always names what
+the version on screen was compared with.
+
+The counts follow the pin: with a version pinned, every row says what that
+version added, changed and removed **relative to the pinned one** rather than
+relative to the save before it. They are recounted when you pin or unpin, which
+takes about a second for a long history — the columns show a dot until each
+row's new numbers arrive. The status line names what they were counted against.
+
+Click a row and that version loads — the row it is on is outlined in red — with
+its changes drawn over it:
 
 - **green** — blocks this version added
 - **orange** — blocks it moved, rotated, rescaled or retuned
 - **red** — blocks it deleted, left standing where they used to be
 
-The block of colour beside each of the three headings opens a picker for it:
-red, green, blue, and an opacity. Whatever you choose is used for both the counts
+Braces, fuel lines and winches are drawn along their whole length rather than
+just at the end they are anchored to, since where the far end is is most of what
+a brace *is*.
+
+The block of colour beside each heading opens a picker for it: red, green, blue
+and an opacity, each with a slider to drag and a box to type an exact number
+into — 0 to 255 for the colours, 0 to 100 for the opacity.
+Whatever you choose is used for both the counts
 in the list and the blocks over the machine — the text always at full strength,
 the blocks at the opacity you set, so you can make a change stand out against a
 dark machine or fade it back until you can see what is underneath. `RESET` puts
-one colour back. The choice lasts for the session.
+one colour back, and clicking anywhere outside the picker puts it away.
+
+The fourth picker, at the head of the `blocks` column, is for everything the save
+left alone — the blocks that were neither added, changed nor removed, which is
+most of what that column counts. It starts at no
+opacity, which is to say switched off: it is most of the machine, and drawing it
+by default would bury the three colours that answer the question. Give it an
+opacity and the changes have the rest of the machine drawn around them, which is
+worth having when what changed is buried inside a large build. At zero opacity
+it costs nothing — those blocks are not drawn at all rather than drawn
+invisibly.
+
+## Comparing two machines that are not versions of each other
+
+The history window answers "what did this save do". The same window will compare
+any two machines you point it at.
+
+In the load screen every machine carries a small button in the corner of its
+picture, above the leftmost of the icons along the bottom: the same branch as the
+history button, with a **+** in the bottom-right corner, which is the one corner
+the branch itself leaves empty. Press
+it and that machine is picked out — the + becomes a **1**, the mark moves onto
+the thumbnail at full size, and the picture behind it dims. Press the button on
+another machine and it takes a **2**. Pressing a mark again puts that machine
+back, and the numbers close up behind it.
+
+Once two or more are picked, a compare button appears at the top of the screen,
+to the right of the two load buttons: the same branch again, with no number on it
+because it is about all of them. Hover it and it says how many machines it
+will compare; press it and the load screen closes, and the history window opens
+listing the machines you chose instead of the versions of one machine.
+Everything in it works the same way from there: click a row to load that machine
+and see what it changed, press a number to pin that machine as the one
+everything is compared against.
+
+Autosave folders themselves cannot be picked — pressing the branch button on one
+already means "every version of this machine". The versions inside one can be,
+which is how you compare two versions that are not next to each other.
+
+The colours and wherever you drag the window to are remembered — between
+machines, between levels, and between one run of the game and the next.
 
 `Ctrl+Y` hides and shows the window and its overlay. It also steps aside on its
-own whenever the game puts up a menu — escape, load, options — and comes back
-when the menu does, the same way Besiege's own block panel behaves.
+own whenever the game puts up a menu — escape, load, options — and while you are
+in the main menu or picking a level, and comes back when you do, the same way
+Besiege's own block panel behaves. Opening a different level does not lose the
+diff: the coloured blocks are drawn again over the machine once it arrives.
 
 Retuning a block — remapping its keys, moving a slider — does not, on its own,
 make Besiege take an autosave. This mod tells it to, so a change you cannot see

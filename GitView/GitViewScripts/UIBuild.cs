@@ -212,9 +212,20 @@ namespace GitView
             // As in PlaceStrip: the bounds are relative to the parent's pivot and
             // anchoredPosition is relative to the anchor, which is the centre of the
             // parent's rect. They coincide only for a centre-pivoted parent.
-            panel.anchoredPosition =
-                new Vector2(box.center.x - box.extents.x,
-                            box.center.y - box.extents.y - gap) - space.rect.center;
+            Vector2 at = new Vector2(box.center.x - box.extents.x,
+                                     box.center.y - box.extents.y - gap) - space.rect.center;
+
+            // Pulled back inside if hanging it off that corner would put it past
+            // the parent's edge, which the rightmost of a row of controls always
+            // would. Left-aligned under its control where there is room, and flush
+            // with the edge where there is not.
+            // sizeDelta rather than rect.width: the anchors were changed a line ago
+            // and no layout pass has run since, but with the anchors together
+            // sizeDelta is the width by definition.
+            float half = space.rect.width * 0.5f;
+            at.x = Mathf.Min(at.x, half - panel.sizeDelta.x);
+            at.x = Mathf.Max(at.x, -half);
+            panel.anchoredPosition = at;
         }
 
         public static Text AddText(Transform parent, string name, int fontSize,

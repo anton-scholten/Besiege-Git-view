@@ -18,7 +18,13 @@ namespace GitView
         /// <summary>Blocks that were in the older version and are gone.</summary>
         public readonly List<BlockRecord> Removed = new List<BlockRecord>();
 
-        public int Unchanged;
+        /// <summary>
+        /// Blocks that came through the save untouched, as they are in the newer
+        /// version. Held rather than counted because the overlay can draw them: not
+        /// part of the answer to "what changed", but the thing the answer is
+        /// attached to.
+        /// </summary>
+        public readonly List<BlockRecord> Unchanged = new List<BlockRecord>();
 
         public bool IsEmpty
         {
@@ -88,7 +94,7 @@ namespace GitView
             {
                 if (pairedBefore[i].Matches(pairedAfter[i]))
                 {
-                    result.Unchanged++;
+                    result.Unchanged.Add(pairedAfter[i]);
                 }
                 else
                 {

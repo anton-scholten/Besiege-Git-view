@@ -29,7 +29,8 @@ The sources divide along one line, and it is worth keeping:
 | `MachineSnapshot.cs` a version's blocks | `HistoryView.cs`, `UIF.cs`, `UIBuild.cs` the window |
 | `VersionEntry.cs` names, stamps, counts | `BrowserWatch.cs` the load-screen button |
 | `RowSort.cs` the column ordering | `MapperWatch.cs` the autosave nudge |
-| `DiffPalette.cs` the three colours | `ColourPicker.cs` choosing one |
+| `DiffPalette.cs` the four colours | `ColourPicker.cs` choosing one |
+| | `Prefs.cs` what is remembered |
 | | `IconArt.cs`, `GitViewMod.cs` |
 
 The left column is where the mod is actually right or wrong, and `run-tests.sh`
@@ -96,12 +97,58 @@ of a five-hundred-block machine. Doing that in one frame is a visible freeze;
 done a version per frame the window is usable immediately and the numbers arrive
 behind it. Only two snapshots are held at once.
 
+**The overlay redraws itself after a level change.** The shells are parented into
+the machine and a level load destroys it, so `GhostView` keeps the diff it drew
+and `HistoryView.RedrawOverlay` puts it back once the new machine has blocks —
+Besiege carries the machine across levels, so the diff is still true of it.
+`GhostView.Lost` is what tells "destroyed under us" from "cleared".
+
 **There is one colour per category, not two.** `DiffPalette` holds it and both
 the list and the overlay read from there, so a count and the blocks it is
 counting can never be written in different greens. The alpha is the only thing
 that differs by use: shells honour it, text forces it to 1. The overlay keeps one
 material per category so that dragging a slider recolours every shell on screen
 with one assignment.
+
+**A colour at zero opacity is off, not faint.** There are four categories and the
+fourth is every block the save left alone, which on a large machine is nearly all
+of them — so `GhostView` spawns nothing for a category whose alpha is 0 rather
+than several hundred shells nobody can see. That makes a colour change able to
+mean two different things, and `_faded` is what tells them apart: crossing zero
+in either direction redraws that one category, anything else is still a material
+assignment.
+
+**Choosing machines lives outside the browser.** `Selection` is static and holds
+paths, because the load screen destroys and rebuilds its slots whenever the page
+or the folder changes — anything kept on a slot is gone the moment the player
+goes looking for the second machine to compare. `SlotMark` is what one slot is
+currently wearing, and `BrowserWatch.Reconcile` brings the two into line every
+sweep rather than at the moment of a click. The window needs no telling that
+these are machines rather than versions of one: a row is a file, a time and a
+picture either way (`Selection.AsRows`).
+
+**The diff never knew what "the previous version" was.** `BlockDiff.Compare`
+takes two snapshots and has no opinion about where they came from or which way
+round they are in time, which is what let the pin button be a field and a lookup
+(`HistoryView._base`, `Baseline`) rather than a second code path. Loading a
+version and working out its diff are separate for the same reason: pinning
+re-answers the question about the version already on screen, and reloading it to
+say so would throw the build area away and put back exactly what was there.
+
+**A brace is not where its ghost is.** Braces, fuel lines and winches keep their
+two ends in the block's data as `start-position` / `end-position`, in the block's
+own local space; `GhostView.DrawSpan` puts a cylinder between them. Recognised by
+those two keys rather than by block type, so a modded block that drags the same
+way is drawn too. The reconstruction was checked against 1900 real endpoints —
+see MODDING-NOTES.
+
+**Preferences go through `Modding.Configuration`,** which is Besiege's own answer
+to where a mod keeps data between restarts — an `XDataHolder` per mod, written to
+`Besiege_Data/Mods/Config/GitView_<id>.xml`, the same file the loader already
+keeps this mod's key binding in. The loader reads it at mod load and writes it on
+quit. `Prefs` is the only thing that knows the keys; `DiffPalette` reads them the
+first time a colour is asked for and the window reads its position when it is
+built.
 
 **Thumbnails load and unload with the scroll.** They are 512x512 PNGs, a
 megabyte each as a texture.
@@ -118,7 +165,7 @@ fixed and covered by a test: settings compared as written reported a piston as
 changed once a minute because its start-position wobbled in the eighth decimal
 place.
 
-84 assertions cover the matcher, the tolerances, the quantisation, key bindings,
+85 assertions cover the matcher, the tolerances, the quantisation, key bindings,
 the timestamp parsing and the sorting. The mod compiles under Besiege's own compiler and
 references nothing the loader forbids.
 
@@ -155,12 +202,12 @@ Three things that run found, all since fixed:
 
 Still not confirmed:
 
-- **whether the branch glyph reads at button size**, and which of `Paint`'s
-  routes got it there. `BrowserWatch` logs the button's renderers once, with
-  their kind, mesh size and readability, and says separately if it fell back to a
-  quad of its own — read that first if the icon is still wrong.
-- **whether a machine *file* slot** (rather than an AutoSave folder) shows more
-  than one button, which would change where ours goes. The same log line says.
+- **that the select button lands in the corner above the leftmost icon.**
+  `AboveCorner` takes the bottom row of whatever the slot is showing and steps up
+  from its leftmost button, rather than off one button found by name — the cloud
+  it used to use is the *second* icon along, which is how it ended up over the
+  middle of the row.
+
 - **that stripping a ghost's behaviours silences the INTERSECTION warning.** The
   cause is not in doubt — `GhostTrigger.Update` is one of only four callers of
   `IntersectWarning`, and the other three are slider blocks — but that the strip
@@ -168,5 +215,51 @@ Still not confirmed:
 - **that the mapper nudge produces a version.** Remap a key, change nothing else,
   wait out the sixty seconds, and a new row should appear with one changed block
   in it.
+- **that the corner mark comes out in Besiege's font.** `IconArt.StampFont`
+  copies the glyphs out of the font's own atlas — see MODDING-NOTES. If a number
+  looks pixelled, the fallback ran: `Player.log` says why, unless the font itself
+  was null, which is silent and means UI Factory had not loaded when the icon was
+  drawn (that face is then not cached, so the next one should get it).
+- **the compare-them-all button's size.** Keeping the copy's other behaviours to
+  get its plate back cost it the mouse entirely — see the note in MODDING-NOTES.
+  It is stripped to its `SimpleUIButton` again, draws our own plated icon, and
+  `MatchSize` grows the whole button until what it draws is as tall as what a real
+  load button draws. The log line says by how much.
+- **the tooltip.** A quad under the button carrying a picture of the words
+  (`IconArt.Words`) in Besiege's plate grey and teal with an arrow pointing up at
+  the button; the proportions were checked by rendering the layout outside the
+  game. Two attempts at showing it have failed, so this one does not use
+  `SimpleUIButton`'s enter and exit events at all: `ShowTipOnHover` raycasts the
+  button's own collider against the mouse every frame, and the quad is pushed
+  toward whichever camera can see the browser, in case it was inside the panel.
+  **`Player.log` now says what the tooltip became** — texture size, quad position
+  and scale — or why it could not be drawn. Read that first.
+- **where that button lands.** `RightOfRow` walks right from the rightmost
+  `LoadSaveButton`, hopping to any active `SimpleUIButton` within two and a half
+  widths on the same row, and puts ours one hop past the end. This replaced a
+  pitch measured between the two `LoadSaveButton`s, which is not the pitch the
+  row is drawn on — "load as selection" is not one of them — and left ours a
+  button and a half out. The log line says the local position it chose.
+- **that a pinned row's number reads as marked.** The number is the pin button;
+  tinting the prefab's own background did nothing in game — see the
+  CustomMaterialHandler note in MODDING-NOTES — so `BuildNumber` puts a plain
+  Image behind the label and colours that, borrowing the button's sprite for its
+  corners where there is one.
+- **that the frame around the chosen row clears its rounded corners.**
+  `EdgeInset` is 3 against an assumed corner radius of about 5; if the corners
+  poke out, raise it rather than thinning the bars.
+- **that the preferences round trip.** The file to look at is
+  `Besiege_Data/Mods/Config/GitView_90eacbcd-45ed-417d-8a3e-0456cbac0a59.xml`.
+  Four Colors do appear there and did survive a restart; their **alpha did not**,
+  because Besiege's Color XData has no alpha channel, so opacity now goes beside
+  each one as a Single and the window position as two more. Those Singles, and
+  `window-x` / `window-y` appearing at all, are what still wants looking at.
+- **that a span is drawn where the brace is.** The arithmetic is checked offline
+  against real files; that the cylinder lands on the machine rather than beside
+  it has not been watched.
+- **the default window position.** `WindowHome` was measured off a screenshot at
+  3840x2160 — window box 106..1545 x 302..1422 in pixels, halved for the canvas,
+  taken from the middle of the screen — and the anchors it is measured in are set
+  by us rather than inherited, so it should hold. It has not been seen open.
 
 Errors appear in `Player.log`, and in the in-game console with `show_logs true`.

@@ -77,6 +77,32 @@ namespace GitView
             }
         }
 
+        /// <summary>
+        /// When a machine was last saved, taken from the newest version in its
+        /// autosave folder, or <c>DateTime.MinValue</c> if it has none.
+        ///
+        /// The long way round to a file's date, and the only one there is: the
+        /// browser's own <c>Date</c> is <c>DateTime.Now</c> for everything on this
+        /// platform (see <see cref="VersionEntry.FromTimestamp"/>), a mod may not
+        /// touch <c>System.IO.File</c>, and nothing Besiege exposes will answer the
+        /// question either. What it *has* written down is the time in the name of
+        /// every autosave, so the newest of those is when the machine was last
+        /// saved -- give or take the minutes since the last autosave ran.
+        /// </summary>
+        public static DateTime LastSaved(IVirtualObject machineObject)
+        {
+            List<VersionEntry> versions = Versions(FolderFor(machineObject));
+            DateTime newest = DateTime.MinValue;
+            for (int i = 0; i < versions.Count; i++)
+            {
+                if (versions[i].Saved > newest)
+                {
+                    newest = versions[i].Saved;
+                }
+            }
+            return newest;
+        }
+
         /// <summary>True if this machine has any saved history to show.</summary>
         public static bool HasHistory(IVirtualObject machineObject)
         {
@@ -129,7 +155,14 @@ namespace GitView
                 return versions;
             }
 
+            // Numbered here, while the list is in time order and before anything
+            // else has had a chance to sort it. A version's number is a fact about
+            // the history, not about where it happens to sit in the window.
             RowSort.Apply(versions, RowSort.ByTime, true);
+            for (int i = 0; i < versions.Count; i++)
+            {
+                versions[i].Number = i + 1;
+            }
             if (versions.Count > 0)
             {
                 versions[0].IsFirst = true;
@@ -168,6 +201,7 @@ namespace GitView
             {
                 entry.Saved = stamp;
                 entry.Manual = manual;
+                entry.Named = true;
             }
             else
             {
@@ -180,15 +214,14 @@ namespace GitView
 
         /// <summary>
         /// The date the virtual filesystem carries, as a fallback for a name that
-        /// cannot be parsed. It is an OLE automation date -- what
-        /// <c>DateTime.ToOADate</c> produces -- which is what the browser's own
-        /// "sort by date" compares.
+        /// cannot be parsed. See <see cref="VersionEntry.FromTimestamp"/> for what
+        /// that number actually counts.
         /// </summary>
         private static DateTime FromCollectionDate(IVirtualObject file)
         {
             try
             {
-                return DateTime.FromOADate(file.Date);
+                return VersionEntry.FromTimestamp(file.Date);
             }
             catch (Exception)
             {
@@ -258,7 +291,45 @@ namespace GitView
             record.Flipped = block.Flipped;
             record.SkinName = SkinOf(block);
             record.Settings = SettingsOf(block);
+            ReadSpan(block, record);
             return record;
+        }
+
+        /// <summary>The key Besiege writes a dragged block's first end under.</summary>
+        private const string SpanStartKey = "start-position";
+        private const string SpanEndKey = "end-position";
+
+        /// <summary>
+        /// Picks up the two ends of a block that has two: a brace, a fuel line, a
+        /// winch's rope.
+        ///
+        /// Recognised by the data rather than by a list of block types, because the
+        /// data is what says it. Besiege's own <c>GenericDraggedBlock</c> and
+        /// <c>FuelLineBehaviour</c> both write these two keys and nothing else does,
+        /// and a modded block that drags the same way writes them too and gets drawn
+        /// properly for free.
+        /// </summary>
+        private static void ReadSpan(BlockInfo block, BlockRecord record)
+        {
+            XDataHolder data = block.BlockData;
+            if (data == null || !data.HasData)
+            {
+                return;
+            }
+            try
+            {
+                if (!data.HasKey(SpanStartKey) || !data.HasKey(SpanEndKey))
+                {
+                    return;
+                }
+                record.SpanStart = data.ReadVector3(SpanStartKey);
+                record.SpanEnd = data.ReadVector3(SpanEndKey);
+                record.HasSpan = true;
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not read a dragged block's ends: " + e.Message);
+            }
         }
 
         private static string SkinOf(BlockInfo block)

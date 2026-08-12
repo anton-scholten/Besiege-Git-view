@@ -180,6 +180,138 @@ If you do assign a material anyway, go through `Renderer.material`, never
 with every other slot's copy of it, so writing to it puts your icon on the game's
 own buttons.
 
+### Every field on a slot is private
+
+`FileBrowserSlot` names each of its buttons in a field — `cloudButton`,
+`loadAsSelectionButton`, `deleteButton`, `versionsButton` — and the file name in
+`fileNameTextMesh`. **None of them is reachable from a mod.** Only the two
+properties are: `VirtualObject` and `Thumbnail`. So anything that wants to sit
+beside one of those buttons has to find it another way: by name
+(`GetComponentsInChildren<SimpleUIButton>` and match the GameObject's name), or
+by geometry, with a fallback for when the name changes under you.
+
+`LoadSaveButton` up in the browser's top bar is the same story: it keeps the
+renderer its icon is drawn on in `buttonMeshRenderer`, private, so which of the
+things a button draws is the picture has to be guessed. The size is a good guess
+— a button is an icon on a plate and the plate is never the smaller of the two —
+and repainting the smallest renderer instead of repainting one and turning the
+rest off is what keeps the plate under a replaced icon.
+
+`FileBrowserSlotThumbnail.ApplyTexture` is not public either. What *is* reachable
+is the material behind it: `ThumbnailComponent` takes it from
+`Renderer.material`, which instances one per renderer, so a slot's thumbnail
+material is that slot's alone and setting `mainTexture` on it is exactly what
+`ApplyTexture` does. The browser writes to the same material when it redraws the
+slot, so it takes its picture back by itself — and `IVirtualObject.Thumbnail`,
+the browser's own cache of that picture, is untouched by any of it and is
+public both ways.
+
+### `IVirtualObject.Date` is not an OLE automation date
+
+It is a `double`, and the obvious reading of a `double` date in .NET is
+`DateTime.FromOADate`. That reading is wrong, and it fails in the one way that is
+hard to notice: `FromOADate` **throws** above the year 9999, so every real value
+is out of range, every catch hands back `DateTime.MinValue`, and the date simply
+disappears rather than coming out shifted.
+
+What the number actually counts, from `VirtualFile..ctor`:
+
+```
+Date = StaticSettings.GetTimestamp(File.GetLastWriteTimeUtc(path))
+     = (thatTime - StaticSettings.GetRefDateTime()).TotalSeconds
+     = seconds since 2014-01-01T00:00:00Z
+```
+
+`GetRefDateTime` is a literal `new DateTime(2014, 1, 1, 0, 0, 0, DateTimeKind.Utc)`.
+So the conversion back is `new DateTime(2014,1,1,0,0,0,DateTimeKind.Utc).AddSeconds(date).ToLocalTime()`
+— local, because the timestamps in Besiege's own file names are local wall clock,
+and the two kinds of row have to be comparable. `VersionEntry.FromTimestamp`.
+
+### …and on Linux it is always `DateTime.Now` anyway
+
+Read the constructor again. That last-write-time branch is an `else`:
+
+```
+if (ObjectPath.IsRoot || ObjectPath.IsChildOf(FileSystemPath.Root))
+    Date = GetTimestamp(DateTime.Now);          // <- this one
+else if (IOHelper.FileOrFolderExists(...))
+    Date = GetTimestamp(File.GetLastWriteTimeUtc(...));
+```
+
+`FileSystemPath.Root` is built in the static constructor as `new FileSystemPath("/")`,
+and `IsChildOf` is `Root.IsParentOf(this)`, which is `this.Path.StartsWith("/")`.
+**Every absolute path on Linux or macOS starts with "/"**, so every file in the
+browser takes the first branch and is stamped with the moment the folder was
+listed. On Windows the paths start `C:/` and the dates are real. The game's own
+"sort by date" in the load screen is equally affected; this is Besiege's bug, not
+the mod's.
+
+There is no way round it from a mod: `System.IO.File` is blacklisted, `IOHelper`
+exposes only existence checks, and `Modding.ModIO` — which is otherwise a complete
+file API — has no timestamp call either. What Besiege *has* written down is the
+time in the name of every autosave, so `VersionScan.LastSaved` takes a machine's
+date from the newest file in its autosave folder, and rows with no autosave show
+no time at all rather than a made-up one.
+
+### Writing in Besiege's font without a Text or a TextMesh
+
+A generated icon can carry the game's own lettering: `UIF.Font` (UI Factory's
+`Besiege.UI.Make.Font`, the font the windows are written in) →
+`RequestCharactersInTexture(text, points, style)` → `GetCharacterInfo` per
+character → copy the glyph out of `font.material.mainTexture` into your own
+pixels. The atlas is very often unreadable, so it comes back through the same
+`RenderTexture` + `ReadPixels` route as a thumbnail; the coverage is in the
+**alpha** channel whether the atlas is Alpha8 or ARGB32.
+
+Two things to check, both of which mean falling back to something you drew
+yourself: `GetCharacterInfo` returning false for a character the font has no
+glyph for, and a glyph packed into the atlas rotated, which shows up as
+`uvBottomLeft.x != uvTopLeft.x`.
+
+Fit the glyphs' *ink* box (`minX`/`maxX`/`minY`/`maxY` around the pen positions),
+not the line box. Line boxes carry the font's leading, so a "1" fitted by its
+line box comes out visibly smaller than a "4" fitted the same way.
+
+A `TextMesh` parented to the icon is the obvious alternative and is worse: it is a
+second object to place, scale, hide and destroy in step with the first, and its
+size in world units cannot be known until it has been rendered.
+
+### A copied button must be stripped to its `SimpleUIButton`, and then it is small
+
+Leave the other behaviours on a copied `LoadSaveButton` and it stops responding to
+the mouse entirely — no click, no hover. Something on that button turns itself off
+when the browser has nothing for it to act on, and `SimpleUIButton.ToggleButton`
+disables **the collider** as well as the behaviour. Besiege's buttons are driven by
+Unity's mouse messages (`ClickBehaviour.OnMouseOver` → `OnCursorOver` → `OnClicked`,
+which also returns early on `!enabled`), so a button with no collider receives
+nothing at all. With `LoadSaveButton` destroyed there is nothing left to switch it
+back on.
+
+Strip it, then, and accept the consequence: one of the behaviours you destroyed is
+what enables the plate renderer under the icon, so the copy draws its icon and
+nothing else — about three fifths the height of the buttons beside it, measured on
+screen. Draw the plate into your own icon and scale the whole copy until what it
+draws is as tall as what the original draws (`BrowserWatch.MatchSize`); the
+collider scales with it, so the clickable area still matches the visible one.
+
+### A copied button shows the *original's* tooltip
+
+`Tooltip` keeps what it shows in a private `tooltipParent` Transform, and that
+object is **not** a child of the button. Unity only redirects a copied reference
+when it points inside the copy, so `Instantiate(button)` gives you a Tooltip
+still pointing at the original's words: hovering the copy lights up the
+neighbour's tooltip, in the neighbour's place. Nothing about that is visible from
+the copy — rewriting every `TextMesh` under it changes nothing, because there are
+none — and the field cannot be repointed either, since reading a private field
+means reflection and the mod loader refuses the assembly for it.
+
+So: destroy the `Tooltip` on the copy (before its `Start` runs, or its `Init`
+caches the original's renderers), and put up your own. `SimpleUIButton` has
+public `MouseEnter` / `MouseExit` delegates and a public `IsHovered`, which is
+all the hover there is to do; for the words, `Instantiate` the nearest `TextMesh`
+on screen and you inherit Besiege's font, size and material without naming any of
+them.
+
 ### A slot has nine buttons and shows one
 
 Measured on a real folder slot: nine `SimpleUIButton`s, of which exactly **one**
@@ -264,6 +396,70 @@ container to be centred within the button, which it is, so it is indifferent to
 the whole question. It also happens to be what Besiege does with its own button
 labels.
 
+### Where a mod keeps data between restarts
+
+**`Modding.Configuration`.** This is the sanctioned route and it is easy to miss,
+because `System.IO` being blacklisted makes it look as though there is none.
+
+```csharp
+XDataHolder data = Modding.Configuration.GetData();   // this mod's, and only this mod's
+data.Write("window", new Vector3(x, y, 0f));
+Modding.Configuration.Save();
+```
+
+`GetData()` works out which mod is asking from `Assembly.GetCallingAssembly()`
+and throws `InvalidOperationException` for an assembly the manifest does not
+list, so call it from your own code and not through a helper in somebody else's
+assembly. It lands in `Besiege_Data/Mods/Config/<Name>_<Id>.xml`, which for most
+mods already exists — the loader keeps `modkeys` there, so any mod declaring a
+`<Key>` has a file before it writes a line of its own.
+
+The round trip is the game's: `ModdingInitializer.LoadMod` calls
+`Configuration.Load` as the mod loads, and `ModManager.OnApplicationQuit` calls
+`Configuration.SaveAll`. Writing into the holder is enough for a clean quit;
+call `Save()` yourself at moments where losing the value to a crash would annoy.
+
+`XDataHolder.Write(string, object)` picks the XData type off the value, and knows
+`bool`, `int`, `float`, `string`, their arrays, `Vector3` and `Color`. There is
+no `Vector2`.
+
+**`Color` has three channels.** Writing one produces
+
+```xml
+<Color key="added"><R>0</R><G>1</G><B>0</B></Color>
+```
+
+with no alpha anywhere in it, so an opacity stored that way is silently gone by
+the next launch and comes back as whatever `ReadColor` defaults to. Keep the
+alpha beside it as a `Single`. Worth reading the file rather than trusting the
+round trip: `Besiege_Data/Mods/Config/<Name>_<Id>.xml` is plain XML, and it
+answered this in one look after a bug report that no amount of staring at the
+code would have.
+
+There is also **`Modding.ModIO`** for arbitrary files — `OpenText`, `CreateText`,
+`ReadAllText`, `SerializeXml` and so on, each taking a `data` flag that decides
+whether the path is relative to the mod's own folder or to Besiege's data folder.
+That is the way round the `System.IO` blacklist when a config holder is not
+enough; note that it is also how the loader intends downloads to happen, since
+`UnityEngine.WWW` is blacklisted too.
+
+`UnityEngine.PlayerPrefs` is not blacklisted and does work, but it is Unity's
+store rather than Besiege's: a mod's settings end up in the game's own options
+file, unmanaged, and outlive uninstalling the mod.
+
+### Own the window's anchors before remembering where it is
+
+A prefab's rect can be anchored and pivoted any way its author liked, and
+`anchoredPosition` means something different for each of them. Set
+`anchorMin`/`anchorMax`/`pivot` to the middle yourself and a stored position
+means one thing — an offset in canvas units from the centre of the screen —
+rather than something only true of the version of the prefab you tested against.
+
+Clamp it when you read it back. The canvas matches on height, so canvas width
+varies with aspect ratio, and nothing stops the player changing resolution
+between sessions; a position remembered off the edge of a narrower screen is a
+window with no way back to it.
+
 ### A colour transition multiplies; it does not replace
 
 `Button.transition = ColorTint` drives the state's colour onto the target
@@ -272,6 +468,21 @@ graphic's **canvas renderer**, and that is multiplied by the graphic's own
 thing to do for a highlight that starts off — and it stays invisible in every
 state, silently. Create the image opaque white and let the transition supply the
 colour.
+
+### You cannot colour a UI Factory graphic; put one of your own in front of it
+
+`Button.colors` on a UIFactory prefab, or setting `color` on the image it draws
+itself with, can do nothing at all and say nothing about it. `Besiege.UI.Bridge`
+ships a `CustomMaterialHandler` — *"forces the image to use a custom shader
+material instead of the default one"* — and a shader written to draw Besiege's
+rounded panel need not multiply by the renderer's colour, which is the only thing
+a tint sets. It is the same failure as repainting a load-screen slot button by
+setting its texture, one canvas up.
+
+What works is a plain uGUI `Image` of your own, parented inside the control and
+stretched over it: default UI shader, takes a colour, one assignment. Borrow the
+prefab image's `sprite` and `type` and it keeps the rounded corners too. This mod
+marks a pinned row and draws its column swatches that way.
 
 ### UI Factory has no colour picker, and Besiege's is out of reach
 
@@ -285,6 +496,44 @@ block. Four `Slider`s in a `Panel` is the honest answer.
 Watch the name: **Besiege has its own `Slider` in the global namespace**, and it
 is the one an unqualified `Slider` binds to inside this mod. Write
 `UnityEngine.UI.Slider` in full.
+
+### A text box that does not also drive the game
+
+Use UIFactory's `Input Field` prefab rather than a uGUI `InputField` of your own:
+it carries `StopsHotkeysWhenInputFieldFocused`, without which typing `255` also
+fires whatever Besiege has bound to 2, 5 and 5.
+
+Commit on `onEndEdit`, not `onValueChanged` — the latter applies the `2` of a
+`255` while it is still being typed, which is very visible when a slider is
+following along. Write the parsed value back into the box afterwards, so `300`
+becoming 255 happens in front of the player rather than silently, and put the
+real value back when the text will not parse at all. A box and a slider driving
+each other need one "I am writing to this" flag between them, or each will hear
+the other's callback as the player having moved it.
+
+### A button inside a button, and a heading that fits its own button
+
+A `Text Button` dropped inside another one does the right thing without being
+told: uGUI walks up from whatever the pointer hit until it finds something that
+handles the click, and stops at the first — so the inner button fires and the
+row it sits in does not. Hover is the exception and is also what you want, since
+`OnPointerEnter` goes to everything in the chain and the row still lights up
+under a pointer that is over the small button.
+
+Reusing the prefab is also the only cheap way to get Besiege's rounded corners:
+they live in the button's own background sprite, so *mark* a button by tinting
+that graphic (`Button.targetGraphic`) rather than by putting a rectangle in front
+of it, which will have corners the button does not. Keep the prefab's `colors`
+and `transition` before overwriting them — they are the only description of the
+ordinary state there is, and putting them back is how the mark comes off.
+
+Sizing a heading is arithmetic nobody can do at build time: Besiege's font is
+wide and letter-spaced, and none of it is measurable before the window exists.
+`Text` is created with `horizontalOverflow = Overflow`, so a label too wide for
+its button silently hangs out of both ends rather than wrapping or clipping.
+Measure a screenshot — in this mod `CHANGED ▲▼` is 82 units of a 690-unit row at
+font size 13 — and give the column enough width for it plus whatever the column
+gives up to a swatch.
 
 ### Whether a prefab's label is the prefab
 
@@ -314,6 +563,34 @@ had deliberately hidden.
 `StatMaster` is not in the stable `Modding` namespace, so guard the read and let
 a failure mean "no menu": a panel that fails to hide is a great deal better than
 one that never appears.
+
+### And when the player has left the build area entirely
+
+`inMenu` is about a menu over the game, not about which game there is. A panel on
+a `DontDestroyOnLoad` canvas — and anything that must survive a level change has
+to be on one — will happily draw itself over the main menu and the level
+selector unless something stops it.
+
+`StatMaster.isMainMenu` is a public static bool, set from `GameVersionText.Awake`
+and cleared from `AddPiece.Awake`/`OnSceneLoad`, and `StatMaster.isLoadingLevels`
+covers the gap in between. The check worth leaning on, though, needs no list of
+scene names at all: **`Machine.Active() == null`**. It is
+`MachineObjectTracker.activeMachine`, and outside a build area there is no
+machine — which for anything describing the machine is the same question anyway.
+
+### Anything parented into the machine is destroyed with it
+
+A level change rebuilds the machine, so objects hung off a block's parent —
+overlays, markers, anything positioned in machine space — are gone, silently,
+while the interface that put them there is still on screen saying otherwise.
+Besiege carries the machine itself across levels, so the right answer is usually
+to draw them again rather than to give up: keep what was drawn, notice that the
+container is null when it should not be, and redraw.
+
+Wait for `Machine.Active().BuildingBlocks` to be non-empty first, not just for
+`IsLoadingMachine` to go false. The machine object exists before its blocks do,
+and a parent taken in that window is the machine's own transform, which is a
+different place — so everything lands somewhere plausible and wrong.
 
 ## Reading a .bsg without being allowed to read files
 
@@ -405,6 +682,35 @@ cannot end up in a save.
 try several and have a fallback. `Particles/Alpha Blended` is the first choice
 here.
 
+### A block that is in two places: braces, fuel lines, winches
+
+A dragged block's ghost is one end of it. The rest — the brace itself, the length
+of hose, the rope — is strung between two points that live in the block's data,
+under `start-position` and `end-position`, with `start-rotation` and
+`end-rotation` beside them. `GenericDraggedBlock` and `FuelLineBehaviour` both
+write them; recognise them by the keys rather than by a list of block types, and
+a modded block that drags the same way is handled too.
+
+**They are in the block's own local space**, scale included:
+
+```
+OnSave    transform.InverseTransformPoint(startPoint.position)
+OnLoad    transform.TransformPoint(data.ReadVector3("start-position"))
+```
+
+so putting one back is `Position + Rotation * Vector3.Scale(local, Scale)`, and
+`Machine.SpawnBlock` assigns `transform.localScale = blockInfo.Scale` directly,
+which is what makes the file's `Scale` the right one to use. Checked against 1900
+endpoints in six real machines: they land in tight clusters at 0.71 (a block's
+corner), 0.00 (dead on a block's centre) and 1.00 from the nearest other block —
+distances that would smear if the space or the scale were wrong.
+
+Nothing in the prefab library is "the middle of a brace", so draw it with a
+`GameObject.CreatePrimitive(PrimitiveType.Cylinder)`: two units tall and one
+across, so the scale is `(width, length / 2, width)` and the rotation is
+`Quaternion.FromToRotation(Vector3.up, end - start)`. It arrives with a collider,
+which wants the same stripping a ghost does.
+
 ## Loading a version
 
 `Machine.Active().LoadMachineInfo(info, resetUndoActions)` is the same call the
@@ -422,6 +728,11 @@ The full write-ups are in the sibling repos. The ones that matter here:
 
 1. **Any `enum` declaration segfaults Besiege's compiler**, which is the compiler
    `tools/build.sh` uses. Use `int` constants — `RowSort` and `BlockDiff` do.
+   The same crash, with the same unhelpful stack, is also what you get for
+   **an identifier that does not exist** — a constant you forgot to declare, or
+   a field that turned out to be private. A SIGSEGV from this compiler means
+   "there is an error somewhere in these files", not necessarily "there is an
+   enum in these files". Bisect: comment out the newest block and build again.
 2. **Never name a member after its own type.** Legal C#, infinite recursion in
    this compiler, and the game dies with a SIGABRT during mod loading.
 3. **Besiege bundles the mod.io SDK**, whose global `ModIO` namespace shadows

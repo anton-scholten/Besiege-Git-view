@@ -48,6 +48,28 @@ namespace GitView
         public string Settings = string.Empty;
 
         /// <summary>
+        /// True for the blocks that are not in one place: a brace, a fuel line, a
+        /// winch. They are dragged between two points, and where the second point
+        /// is is as much a part of the block as where the first one is.
+        /// </summary>
+        public bool HasSpan;
+
+        /// <summary>
+        /// The two ends, in the block's own local space -- which is what Besiege
+        /// writes and what its own loader reads back through
+        /// <c>transform.TransformPoint</c>. Scale is part of that transform, so
+        /// these are only positions once <see cref="Scale"/> has been applied.
+        ///
+        /// Not compared by <see cref="Matches"/> and not meant to be: they are two
+        /// of the block's settings, so <see cref="Settings"/> already carries them,
+        /// and comparing them here as well would only say the same thing twice.
+        /// They are kept apart from it because the overlay has to draw them, and a
+        /// string is no use for that.
+        /// </summary>
+        public Vector3 SpanStart;
+        public Vector3 SpanEnd;
+
+        /// <summary>
         /// How far two positions may differ and still count as the same place.
         ///
         /// Besiege writes coordinates as decimal text and reads them back through a

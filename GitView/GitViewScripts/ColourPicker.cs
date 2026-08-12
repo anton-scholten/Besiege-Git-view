@@ -1,11 +1,12 @@
 using System;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace GitView
 {
     /// <summary>
-    /// A small panel for choosing one of the diff's three colours: red, green,
+    /// A small panel for choosing one of the diff's four colours: red, green,
     /// blue, and an opacity that only the shells over the machine use.
     ///
     /// Built out of UI Factory's Panel and Slider rather than found ready-made --
@@ -22,20 +23,44 @@ namespace GitView
     /// </summary>
     public class ColourPicker
     {
-        private const float Width = 258f;
+        private const float Width = 320f;
         private const float Pad = 10f;
         private const float TitleHeight = 22f;
         private const float RowHeight = 28f;
         private const float RowGap = 2f;
-        private const float LabelWidth = 74f;
+        private const float LabelWidth = 68f;
         private const float SwatchSize = 20f;
         private const float ResetHeight = 24f;
         private const int LabelSize = 12;
 
+        /// <summary>The typed value beside each slider, and the gap before it.</summary>
+        private const float BoxWidth = 58f;
+        private const float BoxGap = 6f;
+
+        /// <summary>
+        /// What a channel reads as in the box: 0-255 for the three colours, the
+        /// numbers a colour is quoted in everywhere else, and 0-100 for the opacity
+        /// because a percentage is what an opacity is.
+        /// </summary>
+        private static readonly float[] ChannelScales = { 255f, 255f, 255f, 100f };
+
         /// <summary>How far below the swatch that opened it the panel sits.</summary>
         private const float DropGap = 4f;
 
-        private static readonly string[] ChannelNames = { "RED", "GREEN", "BLUE", "OPACITY" };
+        private static readonly string[] ChannelNames = { "RED", "GREEN", "BLUE", "OPACITY %" };
+
+        /// <summary>
+        /// What the panel is filled with before anything is drawn on it.
+        ///
+        /// UI Factory's Panel is translucent, which is right for a panel with a
+        /// window behind it and wrong for one hanging over a list: the rows showed
+        /// through it, so the numbers in the column underneath ran into the labels
+        /// on top of it and a selected row turned the whole picker red. Darker than
+        /// the window it sits on, so it reads as being in front rather than as part
+        /// of it, and just short of opaque so it is still Besiege's translucent
+        /// interface rather than a solid box stuck on top of one.
+        /// </summary>
+        private static readonly Color Backing = new Color(0.043f, 0.055f, 0.075f, 0.97f);
 
         private readonly int _category;
         private readonly Action _changed;
@@ -43,10 +68,12 @@ namespace GitView
         private RectTransform _rect;
         private Image _preview;
         private readonly UnityEngine.UI.Slider[] _sliders = new UnityEngine.UI.Slider[4];
+        private readonly UnityEngine.UI.InputField[] _boxes = new UnityEngine.UI.InputField[4];
 
         /// <summary>
-        /// True while a slider is being written to rather than dragged, so the
-        /// callbacks it raises are not mistaken for the player moving it.
+        /// True while a slider or a box is being written to rather than used, so
+        /// the callbacks that raises are not mistaken for the player changing
+        /// something -- and, worse, fed back into the control that raised them.
         /// </summary>
         private bool _binding;
 
@@ -81,6 +108,15 @@ namespace GitView
             }
             _panel.name = "GitView Colour " + DiffPalette.Name(_category);
             _rect = UIF.Rect(_panel);
+
+            // First sibling, so it fills the panel behind everything -- including
+            // whatever frame the prefab draws with children of its own, which stays
+            // on top of it. Left as a raycast target on purpose: without something
+            // solid under the pointer, a click on the panel's own background falls
+            // through to the row behind it and loads a version.
+            Image backing = UIBuild.AddImage(_rect, "Backing", Backing);
+            UIF.Stretch(backing.rectTransform, 0f, 0f);
+            backing.transform.SetAsFirstSibling();
 
             float y = Pad;
 
@@ -147,8 +183,9 @@ namespace GitView
             {
                 return false;
             }
-            Place(UIF.Rect(spawned), Pad + LabelWidth, y,
-                  Width - Pad * 2f - LabelWidth, RowHeight);
+            float sliderLeft = Pad + LabelWidth;
+            float boxLeft = Width - Pad - BoxWidth;
+            Place(UIF.Rect(spawned), sliderLeft, y, boxLeft - BoxGap - sliderLeft, RowHeight);
 
             // Fully qualified throughout: Besiege has a Slider of its own in the
             // global namespace, and it is the one an unqualified name finds.
@@ -174,7 +211,63 @@ namespace GitView
             {
                 OnChannelMoved(captured, moved);
             });
+
+            BuildBox(channel, value, boxLeft, y);
             return true;
+        }
+
+        /// <summary>
+        /// The typed value beside a slider.
+        ///
+        /// A slider alone cannot be told a number: it is a hundred-odd pixels for
+        /// two hundred and fifty-six values, so a colour matched from somewhere
+        /// else is a matter of dragging until it looks right. The box makes the
+        /// same channel exact, and the two drive each other.
+        ///
+        /// Missing it is survivable -- the slider still works -- so an absent
+        /// prefab costs a line in the log rather than the whole picker.
+        /// </summary>
+        private void BuildBox(int channel, float value, float x, float y)
+        {
+            GameObject spawned = UIF.Spawn(UIF.InputPrefab, _rect);
+            if (spawned == null)
+            {
+                Log.Warn("UI Factory could not supply a text box; the " +
+                         ChannelNames[channel] + " value can only be dragged.");
+                return;
+            }
+            spawned.name = ChannelNames[channel] + " value";
+            Place(UIF.Rect(spawned), x, y, BoxWidth, RowHeight);
+
+            UnityEngine.UI.InputField box =
+                spawned.GetComponent<UnityEngine.UI.InputField>();
+            if (box == null)
+            {
+                box = spawned.GetComponentInChildren<UnityEngine.UI.InputField>(true);
+            }
+            if (box == null)
+            {
+                UnityEngine.Object.Destroy(spawned);
+                return;
+            }
+
+            box.characterValidation = UnityEngine.UI.InputField.CharacterValidation.Decimal;
+            box.lineType = UnityEngine.UI.InputField.LineType.SingleLine;
+            box.characterLimit = 5;
+            if (box.textComponent != null)
+            {
+                box.textComponent.alignment = TextAnchor.MiddleCenter;
+            }
+            box.text = Written(channel, value);
+            _boxes[channel] = box;
+
+            int captured = channel;
+            // onEndEdit rather than onValueChanged: committing every keystroke
+            // would apply the 2 of a "255" and drag the slider away underneath.
+            box.onEndEdit.AddListener(delegate(string typed)
+            {
+                OnChannelTyped(captured, typed);
+            });
         }
 
         /// <summary>
@@ -218,7 +311,42 @@ namespace GitView
             {
                 return;
             }
+            Apply(channel, value);
+            Show(channel, value);
+        }
 
+        /// <summary>
+        /// Takes a typed value. Anything unreadable puts the real one back rather
+        /// than guessing: a box left saying something that is not what the colour
+        /// is would be worse than losing the edit.
+        /// </summary>
+        private void OnChannelTyped(int channel, string typed)
+        {
+            if (_binding)
+            {
+                return;
+            }
+
+            float scaled;
+            if (!float.TryParse(typed == null ? string.Empty : typed.Trim(),
+                                NumberStyles.Float, CultureInfo.InvariantCulture,
+                                out scaled))
+            {
+                Bind();
+                return;
+            }
+
+            float value = Mathf.Clamp01(scaled / ChannelScales[channel]);
+            Apply(channel, value);
+            Slide(channel, value);
+            // Written back rather than left as typed, so "300" becomes 255 and
+            // "7.4" becomes 7 in front of the player instead of silently.
+            Show(channel, value);
+        }
+
+        /// <summary>Puts one channel into the palette and everything drawn from it.</summary>
+        private void Apply(int channel, float value)
+        {
             Color colour = DiffPalette.Of(_category);
             if (channel == 0) { colour.r = value; }
             else if (channel == 1) { colour.g = value; }
@@ -228,15 +356,46 @@ namespace GitView
             DiffPalette.Set(_category, colour);
             if (_preview != null)
             {
-                // The swatch shows the colour as the text will read, not as the
-                // shells will: an opacity slider dragged to nothing would otherwise
-                // fade the one thing telling you what you are dragging.
+                // The swatch shows the colour at full opacity rather than as the
+                // shells will be drawn: an opacity slider dragged to nothing would
+                // otherwise fade the one thing telling you what you are dragging.
                 _preview.color = DiffPalette.Ink(_category);
             }
             if (_changed != null)
             {
                 _changed();
             }
+        }
+
+        /// <summary>One channel as it is written in its box: whole numbers, in scale.</summary>
+        private static string Written(int channel, float value)
+        {
+            return Mathf.RoundToInt(value * ChannelScales[channel])
+                       .ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>Writes a channel into its box without that counting as an edit.</summary>
+        private void Show(int channel, float value)
+        {
+            if (_boxes[channel] == null)
+            {
+                return;
+            }
+            _binding = true;
+            _boxes[channel].text = Written(channel, value);
+            _binding = false;
+        }
+
+        /// <summary>Moves a slider without that counting as a drag.</summary>
+        private void Slide(int channel, float value)
+        {
+            if (_sliders[channel] == null)
+            {
+                return;
+            }
+            _binding = true;
+            _sliders[channel].value = value;
+            _binding = false;
         }
 
         private void Reset()
@@ -249,7 +408,7 @@ namespace GitView
             }
         }
 
-        /// <summary>Puts the palette's colour back onto the sliders and the swatch.</summary>
+        /// <summary>Puts the palette's colour back onto the sliders, boxes and swatch.</summary>
         private void Bind()
         {
             Color colour = DiffPalette.Of(_category);
@@ -261,6 +420,10 @@ namespace GitView
                 if (_sliders[channel] != null)
                 {
                     _sliders[channel].value = values[channel];
+                }
+                if (_boxes[channel] != null)
+                {
+                    _boxes[channel].text = Written(channel, values[channel]);
                 }
             }
             _binding = false;
@@ -291,10 +454,49 @@ namespace GitView
 
         public void Close()
         {
+            Commit();
             if (_panel != null)
             {
                 _panel.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Takes whatever is in the boxes before the panel goes away.
+        ///
+        /// A picker now closes when the player clicks somewhere else, and a number
+        /// typed but not entered is exactly what is on screen at that moment.
+        /// Whether hiding the panel would raise <c>onEndEdit</c> on its own depends
+        /// on what a disabled InputField does about the caret it had, which is not
+        /// worth depending on. Re-applying a box that was not being edited costs
+        /// nothing: it holds the value it would be set back to.
+        /// </summary>
+        private void Commit()
+        {
+            for (int channel = 0; channel < _boxes.Length; channel++)
+            {
+                if (_boxes[channel] != null)
+                {
+                    OnChannelTyped(channel, _boxes[channel].text);
+                }
+            }
+        }
+
+        /// <summary>
+        /// True if a point on the screen is over the panel.
+        ///
+        /// Asked rather than handled: the panel can only be told about clicks that
+        /// reach it, and what closes it is a click that does not -- anywhere at all,
+        /// including out in the world past the window's edge, where no amount of
+        /// invisible catcher parented into the window would ever be hit. The camera
+        /// is null because the canvas is Screen Space - Overlay, where a screen
+        /// point needs no unprojecting.
+        /// </summary>
+        public bool Contains(Vector2 screenPoint)
+        {
+            return Visible && _rect != null &&
+                   RectTransformUtility.RectangleContainsScreenPoint(_rect, screenPoint,
+                                                                     null);
         }
     }
 }

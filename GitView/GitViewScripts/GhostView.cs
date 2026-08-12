@@ -7,7 +7,8 @@ namespace GitView
     /// <summary>
     /// Draws a diff over the machine in the build area: what the version added in
     /// green, what it moved or retuned in orange, and what it deleted in red, the
-    /// deleted blocks standing where they used to be.
+    /// deleted blocks standing where they used to be. What it left alone has a
+    /// colour too, though that one starts turned off.
     ///
     /// Nothing here touches the machine. The green and orange marks are hollow
     /// shells spawned a few percent larger than the block they sit on, rather than
@@ -23,8 +24,23 @@ namespace GitView
     /// </summary>
     public class GhostView
     {
-        /// <summary>How much larger than the real block an added/changed shell sits.</summary>
+        /// <summary>How much larger than the real block a shell over it sits.</summary>
         private const float ShellSwell = 1.06f;
+
+        /// <summary>
+        /// How thick the tube drawn along a brace, a hose or a rope is. A little
+        /// fatter than any of them, for the same reason the other shells are a
+        /// little larger than their blocks: it has to be visible over the thing it
+        /// is marking rather than inside it.
+        /// </summary>
+        private const float SpanWidth = 0.16f;
+
+        /// <summary>
+        /// Below this there is nothing to draw between the two ends. Braces are
+        /// dragged, so a brace that was placed and never dragged has both ends in
+        /// the same place, and a zero-length cylinder is a disc of noise.
+        /// </summary>
+        private const float ShortestSpan = 0.05f;
 
         private const string ContainerName = "GitView Diff Overlay";
 
@@ -62,8 +78,26 @@ namespace GitView
         /// </summary>
         private readonly List<GameObject>[] _shells = new List<GameObject>[DiffPalette.Categories];
 
+        /// <summary>
+        /// Whether each category was turned off when it was last drawn, so that a
+        /// colour change can tell a recolour from a redraw. See <see cref="Refresh"/>.
+        /// </summary>
+        private readonly bool[] _faded = new bool[DiffPalette.Categories];
+
         private Shader _shader;
         private bool _shaderSearched;
+
+        /// <summary>
+        /// The diff on show, kept so it can be drawn again.
+        ///
+        /// The shells are parented into the machine, and a level change destroys
+        /// the machine -- so an overlay can disappear without anybody asking it to.
+        /// This is what tells that apart from having been cleared, and what makes
+        /// putting it back possible.
+        /// </summary>
+        private DiffResult _showing;
+
+        private bool _hidden;
 
         /// <summary>True while a diff is being shown.</summary>
         public bool Showing
@@ -71,9 +105,21 @@ namespace GitView
             get { return _container != null; }
         }
 
+        /// <summary>
+        /// True when a diff should be on screen and its shells are not -- which
+        /// means the machine they hung off was destroyed under them.
+        /// </summary>
+        public bool Lost
+        {
+            get { return _showing != null && _container == null; }
+        }
+
         public void Show(DiffResult diff)
         {
-            Clear();
+            // Held across the wipe: Clear forgets what is being shown, and this
+            // does not want forgetting.
+            Wipe();
+            _showing = diff;
             if (diff == null)
             {
                 return;
@@ -91,21 +137,58 @@ namespace GitView
             _container.transform.localPosition = Vector3.zero;
             _container.transform.localRotation = Quaternion.identity;
             _container.transform.localScale = Vector3.one;
+            // A diff redrawn while the window is standing aside for a menu must
+            // come back hidden, or it appears over the menu that hid it.
+            _container.SetActive(!_hidden);
 
             int drawn = 0;
-            drawn += Draw(diff.Removed, DiffPalette.Removed, 1f);
-            drawn += Draw(diff.Added, DiffPalette.Added, ShellSwell);
-            drawn += Draw(diff.Changed, DiffPalette.Changed, ShellSwell);
-
-            if (drawn == 0 && !diff.IsEmpty)
+            int asked = 0;
+            for (int category = 0; category < DiffPalette.Categories; category++)
             {
-                Log.Warn("the diff has " + (diff.Added.Count + diff.Changed.Count +
-                         diff.Removed.Count) + " blocks in it but none could be drawn; " +
-                         "the block types may not have placement ghosts.");
+                List<BlockRecord> blocks = Blocks(diff, category);
+                drawn += Draw(blocks, category, Swell(category));
+                asked += DiffPalette.Faded(category) ? 0 : blocks.Count;
+            }
+
+            // Counted against what was asked for rather than against the diff: a
+            // category the player has turned off draws nothing, and that is not a
+            // failure worth a line in the log.
+            if (drawn == 0 && asked > 0)
+            {
+                Log.Warn("the diff has " + asked + " blocks to draw but none could be " +
+                         "drawn; the block types may not have placement ghosts.");
             }
         }
 
+        /// <summary>The blocks of one category. The overlay's four are the diff's three and what it left alone.</summary>
+        private static List<BlockRecord> Blocks(DiffResult diff, int category)
+        {
+            if (category == DiffPalette.Added) { return diff.Added; }
+            if (category == DiffPalette.Changed) { return diff.Changed; }
+            if (category == DiffPalette.Removed) { return diff.Removed; }
+            return diff.Unchanged;
+        }
+
+        /// <summary>
+        /// How much larger than the block a shell sits. A removed block has nothing
+        /// left where it was, so its shell is the block; every other category wraps
+        /// a block that is still there and has to be a little larger than it to be
+        /// seen at all.
+        /// </summary>
+        private static float Swell(int category)
+        {
+            return category == DiffPalette.Removed ? 1f : ShellSwell;
+        }
+
+        /// <summary>Takes the overlay down and forgets it.</summary>
         public void Clear()
+        {
+            _showing = null;
+            Wipe();
+        }
+
+        /// <summary>Takes the shells down, remembering what they were.</summary>
+        private void Wipe()
         {
             if (_container != null)
             {
@@ -122,6 +205,19 @@ namespace GitView
         }
 
         /// <summary>
+        /// Draws the current diff again over whatever machine is there now. Used
+        /// after a level change, which destroys the machine the shells were
+        /// parented to. See <see cref="Lost"/>.
+        /// </summary>
+        public void Restore()
+        {
+            if (_showing != null)
+            {
+                Show(_showing);
+            }
+        }
+
+        /// <summary>
         /// Picks the overlay up on a colour the player has just changed.
         ///
         /// Cheap enough to call from a slider that is being dragged, which is the
@@ -133,6 +229,16 @@ namespace GitView
         {
             for (int category = 0; category < DiffPalette.Categories; category++)
             {
+                // A category dragged to nothing has no shells to recolour, and one
+                // dragged off nothing has none yet. Crossing that line is the only
+                // thing a colour change can do that a repaint cannot answer, and it
+                // costs one category's shells rather than the whole overlay.
+                if (_faded[category] != DiffPalette.Faded(category))
+                {
+                    Redraw(category);
+                    continue;
+                }
+
                 Color colour = DiffPalette.Of(category);
                 if (_paint[category] != null)
                 {
@@ -160,14 +266,54 @@ namespace GitView
         /// </summary>
         public void SetVisible(bool visible)
         {
+            // Remembered as well as applied, so an overlay redrawn while a menu is
+            // up does not come back on top of it.
+            _hidden = !visible;
             if (_container != null && _container.activeSelf != visible)
             {
                 _container.SetActive(visible);
             }
         }
 
+        /// <summary>
+        /// Throws one category's shells away and spawns them again at the colour it
+        /// is now. Only needed when a category has been turned on or off; a colour
+        /// that merely changed is a material assignment.
+        /// </summary>
+        private void Redraw(int category)
+        {
+            List<GameObject> shells = _shells[category];
+            if (shells != null)
+            {
+                for (int i = 0; i < shells.Count; i++)
+                {
+                    if (shells[i] != null)
+                    {
+                        UnityEngine.Object.Destroy(shells[i]);
+                    }
+                }
+                shells.Clear();
+            }
+
+            _faded[category] = DiffPalette.Faded(category);
+            if (_container == null || _showing == null)
+            {
+                return;
+            }
+            Draw(Blocks(_showing, category), category, Swell(category));
+        }
+
         private int Draw(List<BlockRecord> blocks, int category, float swell)
         {
+            // Recorded whether anything is drawn or not: it is what Refresh compares
+            // against, and a category that drew nothing because it is switched off
+            // has to be told apart from one that drew nothing because it is empty.
+            _faded[category] = DiffPalette.Faded(category);
+            if (_faded[category])
+            {
+                return 0;
+            }
+
             int drawn = 0;
             for (int i = 0; i < blocks.Count; i++)
             {
@@ -181,25 +327,101 @@ namespace GitView
 
         private bool Draw(BlockRecord block, int category, float swell)
         {
+            bool drawn = false;
+
             GameObject ghost = Spawn(block);
-            if (ghost == null)
+            if (ghost != null)
             {
+                ghost.transform.localPosition = block.Position;
+                ghost.transform.localRotation = block.Rotation;
+                ghost.transform.localScale = block.Scale * swell;
+                Adopt(ghost, category);
+                drawn = true;
+            }
+
+            // A brace, a fuel line or a winch is not where its ghost is; it is
+            // strung between two points, and the ghost is only one end of it.
+            if (block.HasSpan)
+            {
+                drawn = DrawSpan(block, category) || drawn;
+            }
+            return drawn;
+        }
+
+        /// <summary>
+        /// Draws the part of a two-ended block that is neither of its ends: the
+        /// brace itself, the length of hose, the rope.
+        ///
+        /// The two ends are stored in the block's own local space -- Besiege saves
+        /// them through <c>transform.InverseTransformPoint</c> and loads them back
+        /// through <c>TransformPoint</c> -- so putting them back means the block's
+        /// rotation and its scale, in that order. The overlay's container sits on
+        /// the same transform the blocks are parented to, which is the space the
+        /// saved position and rotation are already in, so no more than that is
+        /// needed.
+        ///
+        /// A cylinder of Unity's rather than another ghost: there is no prefab for
+        /// "the middle of a brace" to instantiate, and the shape is a tube between
+        /// two points whatever the block is.
+        /// </summary>
+        private bool DrawSpan(BlockRecord block, int category)
+        {
+            Vector3 from = Point(block, block.SpanStart);
+            Vector3 to = Point(block, block.SpanEnd);
+            Vector3 along = to - from;
+            float length = along.magnitude;
+            if (length < ShortestSpan)
+            {
+                // Both ends in the same place: a brace that was placed and not
+                // dragged anywhere. Its ghost is the whole of it.
                 return false;
             }
 
-            ghost.transform.SetParent(_container.transform, false);
-            ghost.transform.localPosition = block.Position;
-            ghost.transform.localRotation = block.Rotation;
-            ghost.transform.localScale = block.Scale * swell;
-            Paint(ghost, category);
-            ghost.SetActive(true);
+            GameObject tube;
+            try
+            {
+                tube = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not draw a dragged block's span: " + e.Message);
+                return false;
+            }
+            // CreatePrimitive brings a collider, which is exactly what the placement
+            // ghosts had to have taken off them.
+            Sterilise(tube);
+
+            tube.transform.localPosition = (from + to) * 0.5f;
+            tube.transform.localRotation = Quaternion.FromToRotation(Vector3.up, along);
+            // Unity's cylinder is two units tall and one across, so half the length
+            // goes in as the height and the width is the diameter.
+            tube.transform.localScale = new Vector3(SpanWidth, length * 0.5f, SpanWidth);
+            Adopt(tube, category);
+            return true;
+        }
+
+        /// <summary>
+        /// One of a block's local points, in the space the overlay is drawn in.
+        /// Rotation then scale, because that is the order a transform applies them
+        /// and these came out of one.
+        /// </summary>
+        private static Vector3 Point(BlockRecord block, Vector3 local)
+        {
+            return block.Position + block.Rotation * Vector3.Scale(local, block.Scale);
+        }
+
+        /// <summary>Parents a finished shell into the overlay and paints it.</summary>
+        private void Adopt(GameObject shell, int category)
+        {
+            shell.transform.SetParent(_container.transform, false);
+            Paint(shell, category);
+            shell.SetActive(true);
 
             if (_shells[category] == null)
             {
                 _shells[category] = new List<GameObject>();
             }
-            _shells[category].Add(ghost);
-            return true;
+            _shells[category].Add(shell);
         }
 
         private GameObject Spawn(BlockRecord block)

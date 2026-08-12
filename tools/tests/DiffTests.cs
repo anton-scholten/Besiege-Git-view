@@ -53,7 +53,7 @@ public static class DiffTests
         Is("nothing added", 0, same.Added.Count);
         Is("nothing changed", 0, same.Changed.Count);
         Is("nothing removed", 0, same.Removed.Count);
-        Is("all unchanged", 3, same.Unchanged);
+        Is("all unchanged", 3, same.Unchanged.Count);
         True("empty diff", same.IsEmpty);
 
         // A machine compared against nothing is entirely new, which is what the
@@ -75,7 +75,7 @@ public static class DiffTests
 
         DiffResult diff = BlockDiff.Compare(before, after);
         Is("two added", 2, diff.Added.Count);
-        Is("one kept", 1, diff.Unchanged);
+        Is("one kept", 1, diff.Unchanged.Count);
         Is("none removed", 0, diff.Removed.Count);
         // Added blocks are reported as they are in the new version, because that is
         // where the overlay has to draw them.
@@ -155,7 +155,18 @@ public static class DiffTests
         Is("a reissued guid is not an addition", 0, diff.Added.Count);
         Is("a reissued guid is not a removal", 0, diff.Removed.Count);
         Is("a reissued guid is not a change", 0, diff.Changed.Count);
-        Is("a reissued guid is unchanged", 2, diff.Unchanged);
+        Is("a reissued guid is unchanged", 2, diff.Unchanged.Count);
+
+        // An unchanged block is kept as the newer version has it, the same way a
+        // changed one is: the overlay can draw them, and only the newer version
+        // says where the block is now. Taking the older record would leave the
+        // guid it no longer has.
+        bool fromNewer = false;
+        for (int i = 0; i < diff.Unchanged.Count; i++)
+        {
+            fromNewer = fromNewer || diff.Unchanged[i].Id == "REISSUED";
+        }
+        True("an unchanged block comes from the newer version", fromNewer);
 
         // Reissued and nudged: still the same block, now genuinely changed.
         BlockRecord nudged = Block("REISSUED", 1, 1, 0, 0);
@@ -185,7 +196,7 @@ public static class DiffTests
         MachineSnapshot pairBefore = Machine(Block("x", 1, 0, 0, 0), Block("y", 1, 5, 0, 0));
         MachineSnapshot pairAfter = Machine(Block("p", 1, 5, 0, 0), Block("q", 1, 0, 0, 0));
         DiffResult paired = BlockDiff.Compare(pairBefore, pairAfter);
-        Is("identical blocks pair by place", 2, paired.Unchanged);
+        Is("identical blocks pair by place", 2, paired.Unchanged.Count);
         Is("identical blocks add nothing", 0, paired.Added.Count);
     }
 
@@ -328,6 +339,39 @@ public static class DiffTests
         VersionEntry unparsed = new VersionEntry();
         unparsed.FileName = "before the wing";
         Is("an unparsed name shows itself", "before the wing", unparsed.Stamp());
+
+        BrowserDates();
+    }
+
+    // The date the load screen carries for a machine, which is what a row gets
+    // when its name is the player's rather than Besiege's. It counts seconds from
+    // the start of 2014 -- see VersionEntry.FromTimestamp -- and reading it as
+    // anything else is not a wrong time but no time at all, since every real value
+    // is then out of range.
+    static void BrowserDates()
+    {
+        DateTime epoch = new DateTime(2014, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        Is("the browser's dates start at 2014", epoch,
+           VersionEntry.FromTimestamp(0.0).ToUniversalTime());
+        Is("and count seconds", epoch.AddDays(365),
+           VersionEntry.FromTimestamp(365.0 * 24.0 * 60.0 * 60.0).ToUniversalTime());
+
+        double seconds = (new DateTime(2026, 8, 11, 10, 30, 0, DateTimeKind.Utc) -
+                          epoch).TotalSeconds;
+        DateTime read = VersionEntry.FromTimestamp(seconds);
+        True("a real machine's date survives being read", read != DateTime.MinValue);
+        Is("and is the year it was saved", 2026, read.ToUniversalTime().Year);
+
+        VersionEntry chosen = new VersionEntry();
+        chosen.FileName = "Tow-truck";
+        chosen.Saved = read;
+        True("so a chosen machine's row has its name on the first line",
+             chosen.Lines().StartsWith("Tow-truck\n"));
+        // The bug this is here for: with no readable date, Stamp falls back to the
+        // file name, and both lines of the row read "Tow-truck".
+        False("and a time rather than the name again on the second",
+              chosen.Lines().EndsWith("Tow-truck"));
+        Contains("which is a clock time", chosen.Lines(), ":");
     }
 
     // -- sorting ---------------------------------------------------------------------
@@ -359,8 +403,91 @@ public static class DiffTests
         Is("tie breaks on time, second row", "first", rows[1].FileName);
         Is("the odd one out sorts last", "second", rows[2].FileName);
 
+        // By name, which is what the saved column sorts by now that a row can be a
+        // machine with a name of its own rather than a version called after a time.
+        // "first", "second", "third" happen to be neither alphabetical nor in time
+        // order, so this cannot pass by accident.
+        RowSort.Apply(rows, RowSort.ByName, true);
+        Is("A to Z", "first", rows[0].FileName);
+        Is("A to Z, second row", "second", rows[1].FileName);
+        Is("A to Z, third row", "third", rows[2].FileName);
+
+        RowSort.Apply(rows, RowSort.ByName, false);
+        Is("Z to A", "third", rows[0].FileName);
+
+        // By the number in the source column: a version's place in its history, or
+        // the order machines chosen by hand were chosen in. The rows were built in
+        // time order, so numbering them backwards is the only way to tell this
+        // apart from sorting by time.
+        rows[0].Number = 3;
+        rows[1].Number = 2;
+        rows[2].Number = 1;
+        RowSort.Apply(rows, RowSort.ByNumber, true);
+        Is("source order, not time order", 1, rows[0].Number);
+        Is("source order, last row", 3, rows[2].Number);
+
         Is("column names", "REMOVED", RowSort.ColumnName(RowSort.ByRemoved));
-        Is("unknown columns fall back to time", "SAVED", RowSort.ColumnName(99));
+        Is("the source column has a name", "SOURCE", RowSort.ColumnName(RowSort.ByNumber));
+        Is("the clock's column has a name too", "TIME", RowSort.ColumnName(RowSort.ByTime));
+        Is("the name column has a name", "NAME", RowSort.ColumnName(RowSort.ByName));
+        Is("the blocks column has a name", "BLOCKS", RowSort.ColumnName(RowSort.ByBlocks));
+        Is("unknown columns fall back to it", "NAME", RowSort.ColumnName(99));
+
+        // By how big the machine is, which is the one number in a row that is not a
+        // comparison. Set against the time order so it cannot pass by accident.
+        rows[0].BlockCount = 40;
+        rows[1].BlockCount = 900;
+        rows[2].BlockCount = 200;
+        RowSort.Apply(rows, RowSort.ByBlocks, false);
+        Is("biggest first", 900, rows[0].BlockCount);
+        Is("smallest last", 40, rows[2].BlockCount);
+        RowSort.Apply(rows, RowSort.ByBlocks, true);
+        Is("smallest first", 40, rows[0].BlockCount);
+
+        SortingIsAnOrder();
+
+        // The two-line row: a name Besiege wrote says the time and nothing else, so
+        // it stays one line. Anything else puts its own name above the time.
+        VersionEntry auto = Row("aut 26.06.27 15-34-37", 4, 0, 0, 0);
+        auto.Named = true;
+        False("a version reads as one line", auto.Lines().Contains("\n"));
+        VersionEntry machine = Row("Tow-truck", 5, 0, 0, 0);
+        True("a machine's name goes above its time", machine.Lines().StartsWith("Tow-truck\n"));
+
+        // And a machine nothing can put a time to is one line: its name. The load
+        // screen cannot always say when a machine was saved, and a row that repeats
+        // the name on both lines says nothing twice.
+        VersionEntry undated = new VersionEntry();
+        undated.FileName = "Tow-truck";
+        Is("an undated machine is just its name", "Tow-truck", undated.Lines());
+    }
+
+    // Every sort has to be a total order, because List.Sort is not stable: rows it
+    // is told are equal come back in an arbitrary arrangement, and one that changes
+    // between calls. A list of machines saved in the same second -- or one whose
+    // times could not be read at all, which is what a browser date read as an OLE
+    // automation date produced -- would then shuffle itself every time a heading
+    // was clicked, and nothing on a row would look like it belonged to it.
+    static void SortingIsAnOrder()
+    {
+        List<VersionEntry> tied = new List<VersionEntry>();
+        for (int i = 0; i < 12; i++)
+        {
+            VersionEntry row = Row("machine " + i, 1, 0, 0, 0);
+            row.Number = i + 1;
+            tied.Add(row);
+        }
+
+        RowSort.Apply(tied, RowSort.ByTime, false);
+        string first = tied[0].FileName + tied[1].FileName + tied[11].FileName;
+        RowSort.Apply(tied, RowSort.ByName, true);
+        RowSort.Apply(tied, RowSort.ByTime, false);
+        Is("rows with the same time keep their order", first,
+           tied[0].FileName + tied[1].FileName + tied[11].FileName);
+        Is("which is the order of their numbers", "machine 0", tied[0].FileName);
+
+        RowSort.Apply(tied, RowSort.ByAdded, false);
+        Is("and so do rows with the same count", "machine 0", tied[0].FileName);
     }
 
     // -- fixtures ---------------------------------------------------------------------
