@@ -18,26 +18,28 @@ a machine takes you there — and every machine's folder carries an extra button
 Press it and the newest version opens, with a window beside it listing every
 version of that machine:
 
-| source | | time | name | blocks | added | changed | removed |
+| version | | name | time | blocks | added | changed | removed |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| **9** | *thumbnail* | 2026-06-27  15:42:38 | | 151 | +11 | ~2 | — |
-| **8** | *thumbnail* | 2026-06-27  15:41:38 | | 142 | +7 | — | -8 |
-| **7** | *thumbnail* | 2026-06-27  15:39:05  SAVED | | 143 | +1 | ~8 | — |
+| **9** | *thumbnail* | | 2026-06-27  15:42:38 | 151 | +11 | ~2 | — |
+| **8** | *thumbnail* | | 2026-06-27  15:41:38 | 142 | +7 | — | -8 |
+| **7** | *thumbnail* | | 2026-06-27  15:39:05  SAVED | 143 | +1 | ~8 | — |
 
 Each row says what that save did to the machine compared with the save before
 it, and how big the machine was at that point. Every heading carries a pair of
 arrows: the lit one is the order in force, so clicking a heading sorts by it and
-clicking again reverses it. `source` sorts by the number, `time` by when the
-machine was saved and `name` by what it is called — which are the same order for
+clicking again reverses it. `version` sorts by the number, `name` by what the
+machine is called and `time` by when it was saved — which are the same order for
 one machine's history, and are not once the list holds machines you chose
-yourself. `time` and `name` head the same column, because a machine whose name is
+yourself. `name` and `time` head the same column, because a machine whose name is
 not just a timestamp shows that name on the first line and the timestamp under
-it.
+it. Machines the load screen cannot put a date to sort by name under `time`,
+since "the order they happened to be in" is not an order anybody asked for. The first column is headed `selection` instead when the list is machines you
+picked out by hand, since its number is then the order you picked them in.
 
 The number on the left is the version's place in the history — 1 is the oldest
 and the largest is the newest. It belongs to the version rather than to the row,
 so sorting by how much a save removed still leaves you able to see what came
-before what, and the `source` heading puts the list back in that order. For
+before what, and that first heading puts the list back in that order. For
 machines you chose yourself the number is the order you chose them in, which is
 what the marks in the load screen said.
 
@@ -68,24 +70,37 @@ Braces, fuel lines and winches are drawn along their whole length rather than
 just at the end they are anchored to, since where the far end is is most of what
 a brace *is*.
 
-The block of colour beside each heading opens a picker for it: red, green, blue
-and an opacity, each with a slider to drag and a box to type an exact number
-into — 0 to 255 for the colours, 0 to 100 for the opacity.
-Whatever you choose is used for both the counts
-in the list and the blocks over the machine — the text always at full strength,
-the blocks at the opacity you set, so you can make a change stand out against a
-dark machine or fade it back until you can see what is underneath. `RESET` puts
-one colour back, and clicking anywhere outside the picker puts it away.
+The window opens on the difference across the whole list: the first row is pinned
+as the source and the last is loaded, so a machine's history opens on everything
+that has happened to it since its oldest save, and a handful of machines opens on
+the difference between the first one you picked and the last. Anything narrower is
+a click away, and unpinning goes back to a save at a time.
 
-The fourth picker, at the head of the `blocks` column, is for everything the save
-left alone — the blocks that were neither added, changed nor removed, which is
-most of what that column counts. It starts at no
-opacity, which is to say switched off: it is most of the machine, and drawing it
-by default would bury the three colours that answer the question. Give it an
-opacity and the changes have the rest of the machine drawn around them, which is
-worth having when what changed is buried inside a large build. At zero opacity
-it costs nothing — those blocks are not drawn at all rather than drawn
-invisibly.
+Both ends of a comparison are marked: the machine you clicked is framed in red,
+the one it is being compared with is framed in the same red dashed, and an arrow
+joins them — out of the number of the one it is measured *from*, down the outside
+of the list, and back in at the number of the one you are looking at. It follows
+the pin and the sort, so it always points at the pair the status line is
+describing.
+
+The cog in the window's title bar, beside the cross, opens **block colors**: all
+four at once — unchanged, added, changed, removed — each on the same colour slider
+Besiege puts on a block, with its own opacity slider under it and a box beside
+each for typing an exact value: `#RRGGBB` for the colour, a percentage for the
+opacity. Whatever you choose
+is used for both the counts in the list and the blocks over the machine — the text
+always at full strength, the blocks at the opacity you set, so you can make a
+change stand out against a dark machine or fade it back until you can see what is
+underneath. The reset arrows in the corner of that window put every colour back.
+
+Four colours rather than three: the first is everything the save left alone —
+the blocks that were neither added, changed nor removed, which is most of what
+the `blocks` column counts. It starts at no opacity, which is to say switched
+off: it is most of the machine, and drawing it by default would bury the three
+colours that answer the question. Give it an opacity and the changes have the
+rest of the machine drawn around them, which is worth having when what changed is
+buried inside a large build. At zero opacity it costs nothing — those blocks are
+not drawn at all rather than drawn invisibly.
 
 ## Comparing two machines that are not versions of each other
 

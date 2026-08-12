@@ -36,6 +36,324 @@ namespace GitView
             return Render(size, GlyphBranch, string.Empty, null);
         }
 
+        // The two line-art marks on the window's title bar. Both are drawn to the
+        // weight the Clippy mod draws its own with -- a tenth of the icon -- so that
+        // a row of buttons across two of this author's mods reads as one set. The
+        // reload arrow is that mod's, constant for constant: the ring it is struck
+        // from, the arc left out for the head to sweep into, and the head itself.
+        private const int ShapeGear = 0;
+        private const int ShapeReload = 1;
+        private const float Stroke10 = 0.10f;
+
+        /// <summary>A cog: the button that opens the options.</summary>
+        public static Texture2D Gear(int size)
+        {
+            return Trace(size, ShapeGear);
+        }
+
+        /// <summary>
+        /// The reload arrow -- a ring with a bite out of it and an arrowhead --
+        /// which is what "put it back the way it was" looks like in this game's
+        /// mods.
+        /// </summary>
+        public static Texture2D Reload(int size)
+        {
+            return Trace(size, ShapeReload);
+        }
+
+        /// <summary>One of the line-art marks, white on transparent.</summary>
+        private static Texture2D Trace(int size, int shape)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+
+            Color32[] pixels = new Color32[size * size];
+            float step = 1f / (size * Samples);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < Samples; sy++)
+                    {
+                        for (int sx = 0; sx < Samples; sx++)
+                        {
+                            float u = (x * Samples + sx + 0.5f) * step;
+                            float v = (y * Samples + sy + 0.5f) * step;
+                            if (shape == ShapeGear ? InsideGear(u, v) : InsideReload(u, v))
+                            {
+                                hits++;
+                            }
+                        }
+                    }
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                                                       (byte)(255 * hits / (Samples * Samples)));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
+        // The cog, measured off the settings mark in the Clippy mod's dialogue
+        // bubble: a solid body with eight square teeth, a ring of nothing inside it,
+        // and a hub in the middle of that. Radii are that icon's own, read off a
+        // screenshot a pixel at a time and divided by its half-width -- so this is
+        // the same drawing rather than an impression of one.
+        private const int Teeth = 8;
+        private const float GearHub = 0.13f;
+        private const float GearBore = 0.22f;
+        private const float GearBody = 0.365f;
+        private const float GearTip = 0.50f;
+        private const float ToothHalfWidth = 0.227f;    // radians, 13 degrees
+
+        private static bool InsideGear(float u, float v)
+        {
+            float dx = u - 0.5f;
+            float dy = v - 0.5f;
+            float radius = Mathf.Sqrt(dx * dx + dy * dy);
+            if (radius <= GearHub)
+            {
+                return true;
+            }
+            if (radius < GearBore)
+            {
+                return false;
+            }
+            if (radius <= GearBody)
+            {
+                return true;
+            }
+            if (radius > GearTip)
+            {
+                return false;
+            }
+            float step = Mathf.PI * 2f / Teeth;
+            float around = Mathf.Repeat(Mathf.Atan2(dy, dx), step) - step * 0.5f;
+            return Mathf.Abs(around) <= ToothHalfWidth;
+        }
+
+        // The reload arrow, constant for constant out of the Clippy mod: one ring
+        // with a bite taken out of it and an arrowhead sweeping into the gap. Drawn
+        // a little low, because the head overshoots the top of the ring and the mark
+        // should look centred rather than measure centred.
+        private const float RingRadius = 0.375f;
+        private const float RingCentreY = 0.465f;
+        private const float GapFrom = 35f;
+        private const float GapTo = 120f;
+        private const float HeadWidth = 0.15f;
+        private const float HeadLength = 0.24f;
+
+        private static bool InsideReload(float u, float v)
+        {
+            float dx = u - 0.5f;
+            float dy = v - RingCentreY;
+            if (Mathf.Abs(Mathf.Sqrt(dx * dx + dy * dy) - RingRadius) <= Stroke10 * 0.5f)
+            {
+                float angle = Mathf.Atan2(dy, dx) * Mathf.Rad2Deg;
+                if (angle < 0f)
+                {
+                    angle += 360f;
+                }
+                if (angle <= GapFrom || angle >= GapTo)
+                {
+                    return true;
+                }
+            }
+
+            // A triangle standing on the end of the arc, pointing the way the arc
+            // was going: base across the stroke, tip one head-length along it.
+            float end = GapTo * Mathf.Deg2Rad;
+            float px = 0.5f + RingRadius * Mathf.Cos(end);
+            float py = RingCentreY + RingRadius * Mathf.Sin(end);
+            float tx = Mathf.Sin(end);
+            float ty = -Mathf.Cos(end);
+            float along = (u - px) * tx + (v - py) * ty;
+            float across = Mathf.Abs(-(u - px) * ty + (v - py) * tx);
+            return along >= 0f && along <= HeadLength &&
+                   across <= HeadWidth * (1f - along / HeadLength);
+        }
+
+        /// <summary>
+        /// A row of colours, side by side: the strip a colour slider runs along.
+        ///
+        /// Besiege's own colour slider is a knob dragged along a picture of the
+        /// colours it can choose -- <c>ColourSliderSelector</c> holds one as a
+        /// <c>Texture</c> and works out which pixel of it a colour is. That texture
+        /// belongs to the block mapper and cannot be borrowed, so this draws the
+        /// same thing: one band per colour, hard-edged, so that what the knob is
+        /// pointing at is unambiguous.
+        /// </summary>
+        public static Texture2D Strip(int width, int height)
+        {
+            if (width < 2)
+            {
+                return null;
+            }
+
+            Texture2D texture = new Texture2D(width, Mathf.Max(1, height),
+                                              TextureFormat.ARGB32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+
+            Color32[] pixels = new Color32[width * texture.height];
+            for (int x = 0; x < width; x++)
+            {
+                Color32 ink = Hue((float)x / (width - 1), StripSaturation);
+                for (int y = 0; y < texture.height; y++)
+                {
+                    pixels[y * width + x] = ink;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
+        /// <summary>
+        /// How washed out the strip is drawn.
+        ///
+        /// Besiege's own colour slider is a pale ramp -- sampled off the rocket's
+        /// explosion colour, its saturation runs about 0.62 across the whole bar --
+        /// while the colour it hands back is the full-strength one: the rocket's
+        /// knob sits at the left of a pink-red band and the value beside it reads
+        /// #FF4C00. So the picture is pastel and the answer is not, and this is the
+        /// picture.
+        /// </summary>
+        private const float StripSaturation = 0.62f;
+
+        /// <summary>
+        /// One hue, at the saturation asked for and full brightness. Worked out here
+        /// rather than through <c>Color.HSVToRGB</c>: this mod is compiled by the
+        /// game's own compiler against the game's own Unity, and six lines of
+        /// arithmetic cannot be missing from it.
+        /// </summary>
+        public static Color Hue(float hue, float saturation)
+        {
+            float sector = Mathf.Repeat(hue, 1f) * 6f;
+            float rise = sector - Mathf.Floor(sector);
+            float low = 1f - saturation;
+            float up = low + saturation * rise;
+            float down = 1f - saturation * rise;
+            switch ((int)sector)
+            {
+                case 0: return new Color(1f, up, low, 1f);
+                case 1: return new Color(down, 1f, low, 1f);
+                case 2: return new Color(low, 1f, up, 1f);
+                case 3: return new Color(low, down, 1f, 1f);
+                case 4: return new Color(up, low, 1f, 1f);
+                default: return new Color(1f, low, down, 1f);
+            }
+        }
+
+        /// <summary>
+        /// Which hue a colour is, as a place along the strip. Grey has no hue and
+        /// comes back as 0, which is where the knob then sits.
+        /// </summary>
+        public static float HueOf(Color colour)
+        {
+            float high = Mathf.Max(colour.r, Mathf.Max(colour.g, colour.b));
+            float low = Mathf.Min(colour.r, Mathf.Min(colour.g, colour.b));
+            float span = high - low;
+            if (span <= 0.0001f)
+            {
+                return 0f;
+            }
+            float hue;
+            if (high == colour.r)
+            {
+                hue = (colour.g - colour.b) / span / 6f;
+            }
+            else if (high == colour.g)
+            {
+                hue = (2f + (colour.b - colour.r) / span) / 6f;
+            }
+            else
+            {
+                hue = (4f + (colour.r - colour.g) / span) / 6f;
+            }
+            return Mathf.Repeat(hue, 1f);
+        }
+
+        // A dash and the gap after it, in pixels, which are units once the sprite is
+        // made at one pixel per unit. Long enough to read as a dashed line at the
+        // width of a two-unit bar, short enough that a row's edge fits several.
+        private const int DashLit = 7;
+        private const int DashGap = 5;
+
+        /// <summary>
+        /// The dashes the frame round the source row is drawn with, running along
+        /// the bar or down it.
+        ///
+        /// Two textures rather than one rotated: a tiled Image repeats along its own
+        /// width, so the dashes in a vertical bar have to be drawn down a vertical
+        /// texture.
+        /// </summary>
+        public static Texture2D Dashes(bool down, int thickness)
+        {
+            int along = DashLit + DashGap;
+            int width = down ? thickness : along;
+            int height = down ? along : thickness;
+
+            Texture2D texture = new Texture2D(width, height, TextureFormat.ARGB32, false);
+            texture.wrapMode = TextureWrapMode.Repeat;
+            texture.filterMode = FilterMode.Point;
+
+            Color32[] pixels = new Color32[width * height];
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    bool lit = (down ? y : x) < DashLit;
+                    pixels[y * width + x] = new Color32(255, 255, 255,
+                                                        lit ? (byte)255 : (byte)0);
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
+        /// <summary>
+        /// A triangle pointing right: the head of the arrow the history window draws
+        /// from one machine to the other.
+        /// </summary>
+        public static Texture2D Head(int size)
+        {
+            Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
+            texture.wrapMode = TextureWrapMode.Clamp;
+            texture.filterMode = FilterMode.Bilinear;
+
+            Color32[] pixels = new Color32[size * size];
+            float step = 1f / (size * Samples);
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < Samples; sy++)
+                    {
+                        for (int sx = 0; sx < Samples; sx++)
+                        {
+                            float u = (x * Samples + sx + 0.5f) * step;
+                            float v = (y * Samples + sy + 0.5f) * step;
+                            // Base up the left edge, tip at the middle of the right.
+                            if (Mathf.Abs(v - 0.5f) <= (1f - u) * 0.5f)
+                            {
+                                hits++;
+                            }
+                        }
+                    }
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                                                       (byte)(255 * hits / (Samples * Samples)));
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply(false, false);
+            return texture;
+        }
+
         /// <summary>
         /// The branch with a plus in its corner: the button that adds this machine
         /// to a comparison. The same glyph as the history button next to it,

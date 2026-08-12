@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -30,6 +32,14 @@ namespace GitView
         public const string TextPrefab = "Text";
         public const string ButtonPrefab = "Text Button";
         public const string SliderPrefab = "Slider";
+
+        /// <summary>
+        /// A button whose face is a picture rather than a word, with the Image to put
+        /// it on in a child called "Icon". The right thing for the marks on a title
+        /// bar: it is the prefab the close cross itself is made from, so a button
+        /// beside that one is the same size and shape without being told to be.
+        /// </summary>
+        public const string IconButtonPrefab = "Icon Button";
 
         /// <summary>
         /// Besiege's text box. It carries UIFactory's

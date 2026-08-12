@@ -41,13 +41,24 @@ namespace GitView
 
         public static string ColumnName(int column)
         {
+            return ColumnName(column, false);
+        }
+
+        /// <summary>
+        /// What a column is called. Only the first one turns on
+        /// <paramref name="chosen"/>: its number is a place in one machine's history
+        /// when the list is that, and the order the player picked them in when the
+        /// list is machines they chose. Two different things, so two names.
+        /// </summary>
+        public static string ColumnName(int column, bool chosen)
+        {
             switch (column)
             {
                 case ByAdded: return "ADDED";
                 case ByChanged: return "CHANGED";
                 case ByRemoved: return "REMOVED";
                 case ByTime: return "TIME";
-                case ByNumber: return "SOURCE";
+                case ByNumber: return chosen ? "SELECTION" : "VERSION";
                 case ByBlocks: return "BLOCKS";
                 default: return "NAME";
             }
@@ -93,6 +104,43 @@ namespace GitView
             });
         }
 
+        /// <summary>
+        /// The row before this one in the list's own order, or null if it is the
+        /// first there is.
+        ///
+        /// By the number, which is the one order that means something in both kinds
+        /// of list: a version's place in its machine's history, and a chosen
+        /// machine's place in the order the player picked them. Deliberately not by
+        /// time. Machines picked out of the load screen often have no readable date
+        /// at all, so any number of them share a time -- comparing on time found
+        /// nothing before *any* of them, every row claimed to be the oldest, and no
+        /// diff was drawn. The counts are worked out walking this same order, so
+        /// this is the row whose numbers are already on screen beside it.
+        /// </summary>
+        public static VersionEntry Previous(List<VersionEntry> rows, VersionEntry entry)
+        {
+            if (rows == null || entry == null)
+            {
+                return null;
+            }
+            List<VersionEntry> ordered = new List<VersionEntry>(rows);
+            Apply(ordered, ByNumber, true);
+            for (int i = 1; i < ordered.Count; i++)
+            {
+                if (ordered[i] == entry)
+                {
+                    return ordered[i - 1];
+                }
+            }
+            return null;
+        }
+
+        private static int Alphabetical(VersionEntry left, VersionEntry right)
+        {
+            return string.Compare(left.FileName, right.FileName,
+                                  StringComparison.OrdinalIgnoreCase);
+        }
+
         private static int Compare(VersionEntry left, VersionEntry right, int column)
         {
             switch (column)
@@ -100,11 +148,21 @@ namespace GitView
                 case ByAdded: return left.Added.CompareTo(right.Added);
                 case ByChanged: return left.Changed.CompareTo(right.Changed);
                 case ByRemoved: return left.Removed.CompareTo(right.Removed);
-                case ByName: return string.Compare(left.FileName, right.FileName,
-                                                   StringComparison.OrdinalIgnoreCase);
+                case ByName: return Alphabetical(left, right);
                 case ByNumber: return left.Number.CompareTo(right.Number);
                 case ByBlocks: return left.BlockCount.CompareTo(right.BlockCount);
-                default: return DateTime.Compare(left.Saved, right.Saved);
+                default:
+                    // Two rows nothing can put a time to are put in name order
+                    // instead. Sorting by time is asking for the list in an order
+                    // that means something, and "the order they happened to be in"
+                    // is not one -- see VersionEntry.FromTimestamp for why a machine
+                    // picked out of the load screen may have no date at all.
+                    if (left.Saved == DateTime.MinValue &&
+                        right.Saved == DateTime.MinValue)
+                    {
+                        return Alphabetical(left, right);
+                    }
+                    return DateTime.Compare(left.Saved, right.Saved);
             }
         }
     }

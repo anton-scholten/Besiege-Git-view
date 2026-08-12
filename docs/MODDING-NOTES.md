@@ -491,7 +491,45 @@ The nineteen prefabs are `Empty`, `Icon`, `Text`, `Text Button`, `Text Toggle`,
 `Slider`, `Options`, `Scroll View`, `Blur`, `Panel`, `Mask`, `Window`, two
 tooltips, plus `WorldCanvas` and `KeymapCanvas`. Besiege's own picker is the
 block mapper's paint selector, behind `InternalModding`, and only opens for a
-block. Four `Slider`s in a `Panel` is the honest answer.
+block.
+
+What that selector *is*, though, is worth copying: `Selectors.ColourSliderSelector`
+is a knob dragged along a `Texture colourPicker` — a strip of the colours it can
+choose — with `ColorToPixelPos` / `ClosestColorPos` mapping between the two. The
+texture is private and mapper-only, but the widget is a slider with a picture
+behind it, and UI Factory supplies the slider. `OptionsView` draws its own strip
+and puts it on a `Slider` with **both** of the prefab's bars turned off — the fill
+*and* the track. A fill bar means "this much"; a colour slider means "this one",
+and a track under the strip makes the strip read as a sticker.
+
+Two things worth knowing about the game's own, read off a screenshot of the rocket
+block's settings:
+
+- **The strip is pale and the answer is not.** Sampled across the bar, its
+  saturation runs about 0.62 the whole way, while the value beside it reads
+  `#FF4C00` — full strength. So draw the ramp washed out and hand back
+  `Hue(t, 1f)`.
+- **It is a smooth ramp of every hue**, not a row of swatches, and there is no
+  black or white on it.
+
+Inset the strip by half the knob's width at each end: a knob's centre stops half a
+knob short of both ends of its track, so a strip drawn edge to edge points at the
+wrong colour near the ends.
+
+And **leave something on the slider that is a raycast target**. A `Slider` is
+dragged through whatever graphic under the pointer catches the ray; turn off the
+prefab's fill *and* its track and there is nothing left, so the control goes
+completely dead — it looks like a picture of a slider. The strip that replaced
+them has to take the job: `raycastTarget = true`.
+
+### What is in UI Factory's sprite bundle cannot be listed
+
+`Make.Sprites` is keyed `"package::name"` and is **not public**, and `Make.Sprite`
+only answers for a name you already know — warning into the log when you are
+wrong. So a mod cannot ask what artwork the bundle holds; it can only try names
+and read `Player.log` for the misses. Worth doing anyway for anything Besiege
+draws itself: its own cog beats a drawn one, and the cost of being wrong is a
+log line and a fallback.
 
 Watch the name: **Besiege has its own `Slider` in the global namespace**, and it
 is the one an unqualified `Slider` binds to inside this mod. Write

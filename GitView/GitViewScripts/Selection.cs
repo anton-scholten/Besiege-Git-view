@@ -151,10 +151,9 @@ namespace GitView
             // the player picked out there. A version's number is its place in a
             // history; a chosen machine's is the place the player gave it.
             //
-            // The oldest still has nothing before it to be compared against, and
-            // that is a question about time rather than about the order they were
-            // picked in.
-            RowSort.Apply(rows, RowSort.ByTime, true);
+            // The first one picked has nothing before it to be compared against --
+            // by that same order, not by time, since most machines picked out of the
+            // load screen have no readable date at all.
             if (rows.Count > 0)
             {
                 rows[0].IsFirst = true;

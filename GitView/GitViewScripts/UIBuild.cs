@@ -187,6 +187,34 @@ namespace GitView
         }
 
         /// <summary>
+        /// Puts a strip's left and right edges exactly where another object's are,
+        /// less an inset on each side, without touching how tall it is or where it
+        /// sits vertically.
+        ///
+        /// For a header over a list: the strip is placed against the scrolling area,
+        /// but the rows are laid out inside the *content* -- and the two need not be
+        /// the same width or start at the same x, since a scroll view may inset its
+        /// content for a scrollbar or a mask. Aligning the header to the box the
+        /// rows are actually in is the only way to be sure a column heading is over
+        /// its column; anything else is arithmetic about a prefab we do not own.
+        /// </summary>
+        public static void MatchWidth(RectTransform strip, RectTransform rows,
+                                      RectTransform space, float inset)
+        {
+            if (strip == null || rows == null || space == null)
+            {
+                return;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            Bounds box = RectTransformUtility.CalculateRelativeRectTransformBounds(space, rows);
+
+            strip.sizeDelta = new Vector2(box.size.x - inset * 2f, strip.sizeDelta.y);
+            strip.anchoredPosition = new Vector2(box.center.x - space.rect.center.x,
+                                                 strip.anchoredPosition.y);
+        }
+
+        /// <summary>
         /// Hangs a panel off the bottom-left corner of a control, in the space of
         /// whatever it is parented to.
         ///
@@ -226,6 +254,143 @@ namespace GitView
             at.x = Mathf.Min(at.x, half - panel.sizeDelta.x);
             at.x = Mathf.Max(at.x, -half);
             panel.anchoredPosition = at;
+        }
+
+        /// <summary>
+        /// Puts a control in a window's title bar, at the right-hand end: square,
+        /// as tall as the bar allows, and <paramref name="place"/> places along from
+        /// the corner.
+        ///
+        /// Square is the point of it. Besiege's own title-bar controls are square --
+        /// the close cross, the pin on the block panel -- and the prefab's is
+        /// authored to whatever width its own window wanted, which is not this one.
+        /// A cross stretched into a rectangle is the sort of thing that reads as a
+        /// mod before anything else about the window does.
+        /// </summary>
+        public static void SquareInBar(RectTransform control, RectTransform bar,
+                                       int place)
+        {
+            SquareInBar(control, bar, place, false);
+        }
+
+        /// <summary>
+        /// The same, at whichever end of the bar is asked for.
+        ///
+        /// The left end is for a control that is not about shutting the window --
+        /// the reset arrows on the colours -- because a title is centred in its bar
+        /// and a pile of marks at one end pushes it off centre or sits on top of it.
+        /// One at each end leaves the middle to the title.
+        /// </summary>
+        public static void SquareInBar(RectTransform control, RectTransform bar,
+                                       int place, bool leftEnd)
+        {
+            if (control == null || bar == null)
+            {
+                return;
+            }
+
+            Canvas.ForceUpdateCanvases();
+            float side = Mathf.Max(14f, bar.rect.height - BarMargin * 2f);
+            float edge = leftEnd ? 0f : 1f;
+            float along = BarMargin + place * (side + BarGap);
+
+            control.anchorMin = new Vector2(edge, 0.5f);
+            control.anchorMax = new Vector2(edge, 0.5f);
+            control.pivot = new Vector2(edge, 0.5f);
+            control.sizeDelta = new Vector2(side, side);
+            control.anchoredPosition = new Vector2(leftEnd ? along : -along, 0f);
+
+            // A square box is not a square picture. A mark authored taller than it is
+            // wide keeps those proportions inside a square rect if it is allowed to,
+            // and Besiege's cross comes out a tall thin X; told to fill the square it
+            // has been given, it is as wide as it is high. Harmless on a background,
+            // which is nine-sliced and ignores it either way.
+            Image[] faces = control.GetComponentsInChildren<Image>(true);
+            for (int i = 0; i < faces.Length; i++)
+            {
+                if (faces[i] != null)
+                {
+                    faces[i].preserveAspect = false;
+                }
+            }
+        }
+
+        /// <summary>How far a title bar's controls sit inside it, and from each other.</summary>
+        private const float BarMargin = 5f;
+        private const float BarGap = 4f;
+
+        /// <summary>
+        /// How much of a title-bar button one of our own marks is drawn across.
+        ///
+        /// Less than all of it. A mark drawn to the edge of its button is a mark as
+        /// big as the bar is tall, which is bigger than anything Besiege puts in a
+        /// title bar -- the cog beside the cross looked like a cog on top of the
+        /// window rather than a control in it. The button keeps its size, since that
+        /// is what is being clicked; only the picture inside it comes in.
+        /// </summary>
+        private const float IconShare = 0.55f;
+
+        /// <summary>
+        /// A picture button for a window's title bar: UI Factory's Icon Button, which
+        /// is what the close cross itself is, wearing a mark of ours.
+        ///
+        /// The sprite goes on the child called "Icon" where the prefab has one. The
+        /// fallback is whatever Image the button does have, because the name is UI
+        /// Factory's to change and a button wearing the wrong picture is a smaller
+        /// failure than a button with none.
+        /// </summary>
+        public static GameObject BarButton(RectTransform bar, int place, string name,
+                                           Sprite face, Color tint, Action clicked)
+        {
+            return BarButton(bar, place, name, face, tint, clicked, false);
+        }
+
+        /// <summary>The same, at whichever end of the bar is asked for.</summary>
+        public static GameObject BarButton(RectTransform bar, int place, string name,
+                                           Sprite face, Color tint, Action clicked,
+                                           bool leftEnd)
+        {
+            GameObject button = UIF.Spawn(UIF.IconButtonPrefab, bar);
+            if (button == null)
+            {
+                return null;
+            }
+            button.name = name;
+            RectTransform rect = UIF.Rect(button);
+            SquareInBar(rect, bar, place, leftEnd);
+
+            Transform child = button.transform.FindChild("Icon");
+            Image image = child == null ? null : child.GetComponent<Image>();
+            if (image == null)
+            {
+                image = button.GetComponentInChildren<Image>(true);
+            }
+            if (image != null)
+            {
+                image.sprite = face;
+                image.color = tint;
+                // Ours are drawn square and edge to edge, so how big the mark is
+                // drawn is exactly how big this rect is -- see IconShare.
+                image.preserveAspect = false;
+                Inside(image.rectTransform, rect.sizeDelta.x * IconShare);
+            }
+
+            UIF.OnClick(button, clicked);
+            return button;
+        }
+
+        /// <summary>Centres a square of the given side inside its parent.</summary>
+        private static void Inside(RectTransform rect, float side)
+        {
+            if (rect == null)
+            {
+                return;
+            }
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(side, side);
+            rect.anchoredPosition = Vector2.zero;
         }
 
         public static Text AddText(Transform parent, string name, int fontSize,

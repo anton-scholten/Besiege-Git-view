@@ -1920,7 +1920,7 @@ namespace GitView
             // are no slots left to put anything back on.
             RestoreAll();
             Selection.Clear();
-            StartCoroutine(OpenHistory(title, rows));
+            StartCoroutine(OpenHistory(title, rows, true));
         }
 
 
@@ -1944,7 +1944,7 @@ namespace GitView
                 return;
             }
 
-            StartCoroutine(OpenHistory(item.Name, versions));
+            StartCoroutine(OpenHistory(item.Name, versions, false));
         }
 
         /// <summary>
@@ -1955,13 +1955,14 @@ namespace GitView
         /// runs, and loading a machine out from under it puts a load and a close
         /// through the same frame.
         /// </summary>
-        private IEnumerator OpenHistory(string machineName, List<VersionEntry> versions)
+        private IEnumerator OpenHistory(string machineName, List<VersionEntry> versions,
+                                        bool chosen)
         {
             _busy = true;
             CloseBrowser();
             yield return null;
 
-            _history.OpenNewest(machineName, versions);
+            _history.OpenNewest(machineName, versions, chosen);
             _busy = false;
         }
 

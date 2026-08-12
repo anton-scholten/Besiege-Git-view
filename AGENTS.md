@@ -29,7 +29,7 @@ The sources divide along one line, and it is worth keeping:
 | `MachineSnapshot.cs` a version's blocks | `HistoryView.cs`, `UIF.cs`, `UIBuild.cs` the window |
 | `VersionEntry.cs` names, stamps, counts | `BrowserWatch.cs` the load-screen button |
 | `RowSort.cs` the column ordering | `MapperWatch.cs` the autosave nudge |
-| `DiffPalette.cs` the four colours | `ColourPicker.cs` choosing one |
+| `DiffPalette.cs` the four colours | `OptionsView.cs` choosing them |
 | | `Prefs.cs` what is remembered |
 | | `IconArt.cs`, `GitViewMod.cs` |
 
@@ -201,6 +201,31 @@ Three things that run found, all since fixed:
   encodes the distinction so it only has to be got right once.
 
 Still not confirmed:
+
+- **the block colors window.** Four colour sliders and four opacity sliders in a
+  second UI Factory window, opened by the cog in the history window's title bar.
+  Each colour slider is UI Factory's `Slider` with **both** its own bars turned
+  off — the fill and the track — and our strip (`IconArt.Strip`) in their place,
+  which is what Besiege's own colour slider is; see the notes for the two things
+  that matter about the game's (pale picture, full-strength answer; a smooth hue
+  ramp with no greys). It hides with the history window when the game puts a menu
+  up, through `OptionsView.Allow`.
+- **the arrow between the two machines being compared.** Three bars and a head in
+  the scrolling content, down the strip to the left of the numbers, pointed by
+  `PointArrow` off `Baseline` — so it says what the status line says. It is
+  redrawn from `Restyle` and `RebuildRows`, which is every path that moves a row
+  or changes what is compared with what.
+- **the two drawn marks.** Both are the Clippy mod's, by request: the cog is that
+  mod's settings mark (radii read off a screenshot of it) and the reset is its
+  reload arrow (constant for constant out of its `UIBuilder`). Asking UI Factory
+  for Besiege's own artwork was tried and taken out again — its bundle cannot be
+  listed (`Make.Sprites` is not public, `Make.Sprite` only answers for a name you
+  already know), so it amounted to guessing names.
+- **that the title-bar marks land on their buttons.** Both windows' bar controls
+  are UI Factory's `Icon Button` — the prefab the close cross itself is — with
+  the sprite put on the child called `Icon`, squared against the bar's height by
+  `UIBuild.SquareInBar`. If a mark is missing, that child is named something else
+  now and the fallback tinted the wrong Image.
 
 - **that the select button lands in the corner above the leftmost icon.**
   `AboveCorner` takes the bottom row of whatever the slot is showing and steps up

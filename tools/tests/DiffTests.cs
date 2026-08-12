@@ -427,7 +427,14 @@ public static class DiffTests
         Is("source order, last row", 3, rows[2].Number);
 
         Is("column names", "REMOVED", RowSort.ColumnName(RowSort.ByRemoved));
-        Is("the source column has a name", "SOURCE", RowSort.ColumnName(RowSort.ByNumber));
+        // The first column's heading is the one thing that says which kind of list
+        // is on screen: a machine's own history, or machines picked out by hand.
+        Is("the first column names the history", "VERSION",
+           RowSort.ColumnName(RowSort.ByNumber));
+        Is("and names the picking order", "SELECTION",
+           RowSort.ColumnName(RowSort.ByNumber, true));
+        Is("the other columns do not care", "ADDED",
+           RowSort.ColumnName(RowSort.ByAdded, true));
         Is("the clock's column has a name too", "TIME", RowSort.ColumnName(RowSort.ByTime));
         Is("the name column has a name", "NAME", RowSort.ColumnName(RowSort.ByName));
         Is("the blocks column has a name", "BLOCKS", RowSort.ColumnName(RowSort.ByBlocks));
@@ -445,6 +452,7 @@ public static class DiffTests
         Is("smallest first", 40, rows[0].BlockCount);
 
         SortingIsAnOrder();
+        WhatCameBefore();
 
         // The two-line row: a name Besiege wrote says the time and nothing else, so
         // it stays one line. Anything else puts its own name above the time.
@@ -488,6 +496,74 @@ public static class DiffTests
 
         RowSort.Apply(tied, RowSort.ByAdded, false);
         Is("and so do rows with the same count", "machine 0", tied[0].FileName);
+    }
+
+    // What a row is compared against when nothing is pinned. The case that matters
+    // is machines picked out of the load screen, most of which have no readable date
+    // at all: comparing on time alone found nothing before any of them, so every row
+    // said it was the oldest and neither a diff nor the arrow between the two was
+    // drawn -- while the counts beside them had been worked out against the machine
+    // picked before.
+    static void WhatCameBefore()
+    {
+        List<VersionEntry> undated = new List<VersionEntry>();
+        for (int i = 0; i < 4; i++)
+        {
+            VersionEntry row = new VersionEntry();
+            row.FileName = "machine " + i;
+            row.Number = i + 1;
+            undated.Add(row);          // Saved left at DateTime.MinValue, as picked
+        }                              // machines with no autosaves come out
+
+        Is("the first has nothing before it", null,
+           RowSort.Previous(undated, undated[0]));
+        Is("and every other has the one picked before it", "machine 1",
+           RowSort.Previous(undated, undated[2]).FileName);
+
+        // Which holds however the list is being shown. Sorting by time puts undated
+        // rows in name order, and that must not change what is compared with what.
+        undated[0].FileName = "zulu";
+        undated[3].FileName = "alpha";
+        RowSort.Apply(undated, RowSort.ByTime, true);
+        Is("undated rows sort by name", "alpha", undated[0].FileName);
+        Is("still by name, reversed", "zulu",
+           Reversed(undated, RowSort.ByTime)[0].FileName);
+        Is("but what came before is still the one picked before", "machine 1",
+           RowSort.Previous(undated, undated[Where(undated, "machine 2")]).FileName);
+
+        // Versions of one machine still compare against the save before them,
+        // whatever order the list is being shown in. Their numbers are their places
+        // in the history, which is what VersionScan gives them.
+        List<VersionEntry> history = new List<VersionEntry>();
+        history.Add(Numbered(Row("newest", 9, 0, 0, 0), 3));
+        history.Add(Numbered(Row("oldest", 1, 0, 0, 0), 1));
+        history.Add(Numbered(Row("middle", 5, 0, 0, 0), 2));
+        Is("the save before the newest is the middle one", "middle",
+           RowSort.Previous(history, history[0]).FileName);
+        Is("the oldest still has nothing before it", null,
+           RowSort.Previous(history, history[1]));
+    }
+
+    static VersionEntry Numbered(VersionEntry entry, int number)
+    {
+        entry.Number = number;
+        return entry;
+    }
+
+    static List<VersionEntry> Reversed(List<VersionEntry> rows, int column)
+    {
+        List<VersionEntry> copy = new List<VersionEntry>(rows);
+        RowSort.Apply(copy, column, false);
+        return copy;
+    }
+
+    static int Where(List<VersionEntry> rows, string name)
+    {
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (rows[i].FileName == name) { return i; }
+        }
+        return -1;
     }
 
     // -- fixtures ---------------------------------------------------------------------
