@@ -86,9 +86,14 @@ its changes drawn over it:
 - **orange** — blocks it moved, rotated, rescaled or retuned
 - **red** — blocks it deleted, left standing where they used to be
 
-Braces, fuel lines and winches are drawn along their whole length rather than
-just at the end they are anchored to, since where the far end is is most of what
-a brace *is*.
+Some blocks are not the shape their icon is. A brace, a spring, a rope or a fuel
+hose is stretched between two points; a build surface is nine blocks in the save —
+the surface, four edges and four corner nodes — whose edges are curves and whose
+outline only the corners know. For all of those, what is drawn over the block is a
+copy of the mesh the game itself generated for it: exactly the shape you are
+looking at, curves and length and thickness included. A block a save *deleted* has
+no mesh left to copy, so it is drawn from what the file says instead — a tube
+along the span, a flat slab through the corners.
 
 The window opens on its own top row with nothing pinned: the first row is loaded
 and compared with the second, which is the same thing the counts beside it are
@@ -153,7 +158,14 @@ already means "every version of this machine". The versions inside one can be,
 which is how you compare two versions that are not next to each other.
 
 The colours and wherever you drag the window to are remembered — between
-machines, between levels, and between one run of the game and the next.
+machines, between levels, and between one run of the game and the next. Neither
+window can be dragged off the screen altogether: enough of the title bar is kept
+in view to take hold of and pull it back.
+
+The overlay goes when the machine does. Clearing the machine leaves the coloured
+blocks hanging where it used to be, so that is noticed and they are dropped —
+opening a *level* is not the same thing, and there the diff is drawn again over
+the machine once it arrives.
 
 `Ctrl+Y` hides and shows the window and its overlay. It also steps aside on its
 own whenever the game puts up a menu — escape, load, options — and while you are
@@ -178,7 +190,10 @@ Then drop the `GitView` folder into `Besiege_Data/Mods/`, or from a clone:
 ./tools/install.sh --copy   # or copy it
 ```
 
-The mod loads when you enter a level or the sandbox, not at startup.
+The mod loads when you enter a level, the sandbox or the level editor, not at
+startup. The editor is a build area like any other as far as this is concerned:
+the same load screen, the same window. What it cannot do there is load a version
+into an editor that has no machine in it — it says so rather than doing nothing.
 
 ## What counts as a change
 

@@ -205,6 +205,20 @@ namespace GitView
         /// <summary>How far this window sits from the one it belongs to.</summary>
         private const float WindowGap = 12f;
 
+        /// <summary>
+        /// Pulls this window back if it has been dragged off the screen. The list
+        /// window looks after itself the same way -- see
+        /// <see cref="HistoryView.KeepOnScreen"/> -- and this one is dragged by the
+        /// same kind of bar, so it is the same problem and the same answer.
+        /// </summary>
+        public void KeepInside()
+        {
+            if (_wanted && _window != null && _window.activeSelf)
+            {
+                HistoryView.KeepOnScreen(_rect);
+            }
+        }
+
         public void Close()
         {
             _wanted = false;

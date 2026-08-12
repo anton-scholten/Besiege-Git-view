@@ -268,6 +268,7 @@ namespace GitView
                     snapshot.Blocks.Add(record);
                 }
             }
+            SurfaceShape.Link(snapshot);
             return snapshot;
         }
 
@@ -288,6 +289,7 @@ namespace GitView
             record.SkinName = SkinOf(block);
             record.Settings = SettingsOf(block);
             ReadSpan(block, record);
+            ReadLinks(block, record);
             return record;
         }
 
@@ -325,6 +327,59 @@ namespace GitView
             catch (Exception e)
             {
                 Log.Warn("could not read a dragged block's ends: " + e.Message);
+            }
+        }
+
+        // What a build surface writes: the guids of its four edges, and what an edge
+        // writes: the guids of the two corner nodes it runs between. Recognised by
+        // the keys rather than by block type, as the two ends of a brace are.
+        private const string EdgesKey = "edges";
+        private const string EdgeStartKey = "start";
+        private const string EdgeEndKey = "end";
+        private const string ThicknessKey = "bmt-thickness";
+
+        /// <summary>
+        /// Picks up what a block says about other blocks: a build surface's edges,
+        /// and an edge's two corner nodes.
+        ///
+        /// Read here and followed later, because a guid means nothing until the
+        /// block it names has been read too. See <see cref="SurfaceShape.Link"/>.
+        /// </summary>
+        private static void ReadLinks(BlockInfo block, BlockRecord record)
+        {
+            XDataHolder data = block.BlockData;
+            if (data == null || !data.HasData)
+            {
+                return;
+            }
+            try
+            {
+                if (data.HasKey(EdgesKey))
+                {
+                    string edges = data.ReadString(EdgesKey);
+                    if (!string.IsNullOrEmpty(edges))
+                    {
+                        record.EdgeIds = edges.Split('|');
+                    }
+                    if (data.HasKey(ThicknessKey))
+                    {
+                        // How thick the player made the slab, which is how thick the
+                        // mark drawn over it has to be to be outside it.
+                        record.Thickness = Mathf.Abs(data.ReadFloat(ThicknessKey));
+                    }
+                }
+                // Not "start-position" and "end-position", which are the two ends of
+                // a brace: these two hold guids, and only the pieces of a surface
+                // write them.
+                if (data.HasKey(EdgeStartKey) && data.HasKey(EdgeEndKey))
+                {
+                    record.EdgeFrom = data.ReadString(EdgeStartKey) ?? string.Empty;
+                    record.EdgeTo = data.ReadString(EdgeEndKey) ?? string.Empty;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not read what a block is joined to: " + e.Message);
             }
         }
 

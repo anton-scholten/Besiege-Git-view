@@ -505,20 +505,20 @@ namespace GitView
         /// The window and its canvas outlive scene loads -- they have to, or the
         /// history would be lost every time a level was opened -- so nothing stops
         /// them being drawn over the main menu unless it is checked for.
-        /// <c>Machine.Active()</c> is the check that matters and the one that needs
-        /// no list of scene names: it is the machine the window is describing, and
-        /// outside a build area there is not one.
         ///
         /// <c>StatMaster</c> is not part of the stable Modding namespace and can
         /// change without notice, so a failure here means "not busy" -- a window
         /// that fails to hide is a great deal better than one that never appears.
+        ///
+        /// "There is no machine" is not on the list, though it used to be. The level
+        /// editor is a build area like any other and its load screen is the same load
+        /// screen, but an editor with nothing placed in it has no active machine --
+        /// so that test hid the window in the one place a player had just asked for
+        /// it. What it was really guarding against is the main menu, and
+        /// <c>isMainMenu</c> says that directly.
         /// </summary>
         private static bool GameIsBusy()
         {
-            if (Machine.Active() == null)
-            {
-                return true;
-            }
             try
             {
                 return StatMaster.inMenu || StatMaster.hudHidden
@@ -526,7 +526,9 @@ namespace GitView
             }
             catch (Exception)
             {
-                return false;
+                // Without StatMaster there is one test left, and it is the old one:
+                // outside a build area there is no machine to be describing.
+                return Machine.Active() == null;
             }
         }
 
@@ -540,8 +542,43 @@ namespace GitView
             {
                 Apply();
                 NotePosition();
+                if (_options != null)
+                {
+                    _options.KeepInside();
+                }
+                NoteMachineCleared();
                 RedrawOverlay();
             }
+        }
+
+        /// <summary>
+        /// Drops the overlay when the player empties the machine.
+        ///
+        /// The shells hang off whatever the blocks are parented to, so clearing the
+        /// machine leaves them where they were: a diff of a machine that is no longer
+        /// there, in mid-air, with nothing underneath it. It is not the same thing as
+        /// a level change, where the shells are destroyed along with everything else
+        /// and <see cref="RedrawOverlay"/> puts them back -- here they survive and are
+        /// simply wrong, so they go and do not come back until another version is
+        /// clicked.
+        /// </summary>
+        private void NoteMachineCleared()
+        {
+            if (!_ghosts.Showing || GameIsBusy())
+            {
+                return;
+            }
+            Machine machine = Machine.Active();
+            if (machine == null || machine.IsLoadingMachine)
+            {
+                return;
+            }
+            if (machine.BuildingBlocks != null && machine.BuildingBlocks.Count > 0)
+            {
+                return;
+            }
+            _ghosts.Clear();
+            Say("The machine was cleared -- pick a version to draw one again.");
         }
 
         /// <summary>
@@ -595,7 +632,7 @@ namespace GitView
             {
                 return;
             }
-            Vector2 now = _windowRect.anchoredPosition;
+            Vector2 now = KeepOnScreen(_windowRect);
             if ((now - _placed).sqrMagnitude < MovedEnough * MovedEnough)
             {
                 return;
@@ -603,6 +640,66 @@ namespace GitView
             _placed = now;
             _dirty = true;
             Prefs.SetWindow(now);
+        }
+
+        /// <summary>
+        /// How much of a window has to stay on screen: enough of its title bar to
+        /// get hold of, and enough across for that to be worth aiming at.
+        /// </summary>
+        private const float HeldWidth = 120f;
+        private const float HeldHeight = 34f;
+
+        /// <summary>
+        /// Pulls a window back if it has been dragged off the screen, and answers
+        /// where it ended up.
+        ///
+        /// A window is dragged by its title bar, so a window dragged out past the
+        /// edge takes the only thing that can bring it back with it -- and this one
+        /// remembers where it was put, so it is still out there the next time the
+        /// game starts. Enough of the bar is kept on screen to grab.
+        ///
+        /// Public and static because the colours window has the same problem and no
+        /// reason to solve it differently.
+        /// </summary>
+        public static Vector2 KeepOnScreen(RectTransform window)
+        {
+            RectTransform space = window == null
+                ? null : window.parent as RectTransform;
+            if (space == null)
+            {
+                return window == null ? Vector2.zero : window.anchoredPosition;
+            }
+
+            // Where the window's own box is, in the space it is placed in, and how
+            // far it may go before there is nothing left to take hold of.
+            Rect box = window.rect;
+            Rect screen = space.rect;
+            Vector2 at = window.anchoredPosition;
+            // anchoredPosition is measured from the anchor; with the window anchored
+            // anywhere but the middle of the screen the two differ by this much.
+            Vector2 anchor = new Vector2(
+                Mathf.Lerp(screen.xMin, screen.xMax, window.anchorMin.x),
+                Mathf.Lerp(screen.yMin, screen.yMax, window.anchorMin.y));
+
+            float left = anchor.x + at.x + box.xMin;
+            float bottom = anchor.y + at.y + box.yMin;
+            float wide = Mathf.Min(box.width, HeldWidth);
+            float high = Mathf.Min(box.height, HeldHeight);
+
+            float x = Mathf.Clamp(left, screen.xMin - box.width + wide,
+                                  screen.xMax - wide);
+            // Down is the direction that matters at the bottom: a window whose top
+            // bar is below the screen cannot be reached at all, so the top is what is
+            // kept rather than the bottom.
+            float y = Mathf.Clamp(bottom, screen.yMin - box.height + high,
+                                  screen.yMax - box.height);
+
+            Vector2 moved = new Vector2(at.x + (x - left), at.y + (y - bottom));
+            if ((moved - at).sqrMagnitude > 0.0001f)
+            {
+                window.anchoredPosition = moved;
+            }
+            return moved;
         }
 
         /// <summary>

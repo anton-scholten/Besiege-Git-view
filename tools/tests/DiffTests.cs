@@ -28,6 +28,7 @@ public static class DiffTests
         KeyBindings();
         Stamps();
         Sorting();
+        Surfaces();
 
         Console.WriteLine("Diff tests: " + checks + " checks.");
         if (failures.Count == 0)
@@ -611,6 +612,154 @@ public static class DiffTests
     }
 
     // -- fixtures ---------------------------------------------------------------------
+
+    // -- build surfaces ---------------------------------------------------------------
+
+    // A build surface is nine blocks: the surface, four edges and four corner nodes,
+    // each naming the next by guid. Where it *is* is therefore a question about the
+    // whole machine, and until it was answered a changed surface was marked by one
+    // dot at one corner -- the surface block's own position -- with nothing drawn
+    // between them.
+    static void Surfaces()
+    {
+        MachineSnapshot machine = Surface(true);
+        BlockRecord surface = machine.Blocks[0];
+        True("a surface knows its own shape", surface.HasSurface);
+        Is("with one corner per node", 4, surface.Corners.Length);
+
+        // The corners have to come out in the order they go round the outline, which
+        // is not the order the edges are named in: a fan of triangles through them in
+        // any other order is a bow tie. Which corner it starts at does not matter --
+        // that every step is along a side and never across the diagonal does.
+        True("the corners come out in the order they go round",
+             RoundTheOutline(surface.Corners));
+        True("and every corner is there once",
+             Spread(surface.Corners) == 4f + 3f + 4f + 3f);
+
+        // Dragging a corner moves a node, not the surface: the surface's own
+        // position, rotation and list of edges are all exactly what they were. The
+        // corners go into its settings so that the diff notices anyway.
+        MachineSnapshot moved = Surface(true);
+        moved.Blocks[6].Position = new Vector3(9f, 0f, 0f);   // one of the nodes
+        SurfaceShape.Link(moved);
+        False("a dragged corner is a change to the surface",
+              surface.Matches(moved.Blocks[0]));
+        Is("and the surface itself has not moved", surface.Position,
+           moved.Blocks[0].Position);
+
+        // A machine saved twice without being touched must read the same both times,
+        // or every surface in it would be reported as changed every save.
+        Is("an untouched surface reads the same twice", surface.Settings,
+           Surface(true).Blocks[0].Settings);
+
+        // Half a surface -- an edge belonging to another machine, a file cut short --
+        // is left alone rather than guessed at.
+        MachineSnapshot broken = Surface(false);
+        False("a surface whose edges do not join up claims no shape",
+              broken.Blocks[0].HasSurface);
+
+        // The pieces are drawn by the surface, so they are not drawn again on their
+        // own: a corner node's ghost is the little ball you drag it by.
+        True("a resolved surface speaks for its edges and corners",
+             AllOf(machine, 1, machine.Blocks.Count, true));
+        False("and one that could not be resolved speaks for nothing",
+              AllOf(broken, 1, broken.Blocks.Count, true));
+
+        // Three corners is a surface too, and the same walk closes it.
+        MachineSnapshot triangle = Surface(true, 3);
+        True("a three-cornered surface resolves", triangle.Blocks[0].HasSurface);
+        Is("with three corners", 3, triangle.Blocks[0].Corners.Length);
+
+        // Standing on its side, which is the case the outline's own plane has to be
+        // worked out for rather than guessed as "flat".
+        MachineSnapshot upright = Surface(true);
+        for (int i = 5; i < upright.Blocks.Count; i++)
+        {
+            Vector3 was = upright.Blocks[i].Position;
+            upright.Blocks[i].Position = new Vector3(was.x, was.z, 0f);
+        }
+        SurfaceShape.Link(upright);
+        True("a surface standing on its side resolves like any other",
+             upright.Blocks[0].HasSurface);
+    }
+
+    /// Whether the corners of the 4x3 test rectangle are in order round it: every
+    /// step from one to the next is a side, never the diagonal.
+    static bool RoundTheOutline(Vector3[] corners)
+    {
+        for (int i = 0; i < corners.Length; i++)
+        {
+            float step = (corners[(i + 1) % corners.Length] - corners[i]).magnitude;
+            if (step > 4.001f || step < 2.999f) { return false; }
+        }
+        return true;
+    }
+
+    /// How far it is round the outline, corner to corner.
+    static float Spread(Vector3[] corners)
+    {
+        float all = 0f;
+        for (int i = 0; i < corners.Length; i++)
+        {
+            all += (corners[(i + 1) % corners.Length] - corners[i]).magnitude;
+        }
+        return all;
+    }
+
+    /// Whether every block from `from` to `to` is (or is not) part of a surface.
+    static bool AllOf(MachineSnapshot machine, int from, int to, bool part)
+    {
+        for (int i = from; i < to; i++)
+        {
+            if (machine.Blocks[i].PartOfSurface != part) { return false; }
+        }
+        return true;
+    }
+
+    static MachineSnapshot Surface(bool whole)
+    {
+        return Surface(whole, 4);
+    }
+
+    /// Builds one surface out of its pieces -- the surface, an edge per side and a
+    /// corner node per corner -- with the edges named out of order on purpose. Pass
+    /// false to break the loop.
+    static MachineSnapshot Surface(bool whole, int sides)
+    {
+        BlockRecord surface = Block("surface", 73, 0f, 0f, 0f);
+
+        Vector3[] where = new Vector3[]
+        {
+            new Vector3(0f, 0f, 0f), new Vector3(4f, 0f, 0f),
+            new Vector3(4f, 0f, 3f), new Vector3(0f, 0f, 3f)
+        };
+        BlockRecord[] nodes = new BlockRecord[sides];
+        BlockRecord[] edges = new BlockRecord[sides];
+        string[] named = new string[sides];
+        for (int i = 0; i < sides; i++)
+        {
+            nodes[i] = Block("n" + i, 71, where[i].x, where[i].y, where[i].z);
+            edges[i] = Block("e" + i, 72, 0f, 0f, 0f);
+            edges[i].EdgeFrom = "n" + i;
+            edges[i].EdgeTo = "n" + ((i + 1) % sides);
+            // Named back to front: the file does not promise an order, and the walk
+            // is what puts them in one.
+            named[i] = "e" + (sides - 1 - i);
+        }
+        surface.EdgeIds = named;
+        if (!whole)
+        {
+            edges[sides - 2].EdgeFrom = "somewhere-else";
+            edges[sides - 2].EdgeTo = "somewhere-else-again";
+        }
+
+        MachineSnapshot machine = new MachineSnapshot();
+        machine.Blocks.Add(surface);
+        for (int i = 0; i < sides; i++) { machine.Blocks.Add(edges[i]); }
+        for (int i = 0; i < sides; i++) { machine.Blocks.Add(nodes[i]); }
+        SurfaceShape.Link(machine);
+        return machine;
+    }
 
     static BlockRecord Block(string id, int kind, float x, float y, float z)
     {

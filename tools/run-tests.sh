@@ -50,7 +50,7 @@ done
 "$BUILD_DIR/besiegecc" -target:exe -out:"$BUILD_DIR/tests.exe" -lib:"$MANAGED" \
     -r:UnityEngine.dll -r:System.dll -r:System.Core.dll \
     "$SRC_DIR/BlockRecord.cs" "$SRC_DIR/MachineSnapshot.cs" "$SRC_DIR/BlockDiff.cs" \
-    "$SRC_DIR/VersionEntry.cs" "$SRC_DIR/RowSort.cs" \
+    "$SRC_DIR/VersionEntry.cs" "$SRC_DIR/RowSort.cs" "$SRC_DIR/SurfaceShape.cs" \
     "$REPO_DIR/tools/tests/DiffTests.cs"
 
 TARGET_ASM="$BUILD_DIR/tests.exe" "$BUILD_DIR/monohost"

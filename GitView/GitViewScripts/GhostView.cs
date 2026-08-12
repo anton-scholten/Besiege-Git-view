@@ -132,6 +132,13 @@ namespace GitView
                 return;
             }
 
+            // Which layer the machine's own blocks are drawn on. A GameObject built
+            // from nothing -- the tube along a brace, the slab over a build surface
+            // -- starts on the default layer, which the build area's camera need not
+            // be drawing at all; the ghosts do not have the problem because they
+            // arrive on whatever layer Besiege authored them for.
+            _drawLayer = LayerOfBlocks(root);
+
             _container = new GameObject(ContainerName);
             _container.transform.SetParent(root, false);
             _container.transform.localPosition = Vector3.zero;
@@ -143,11 +150,19 @@ namespace GitView
 
             int drawn = 0;
             int asked = 0;
+            int surfaces = 0;
+            _surfaces = 0;
             for (int category = 0; category < DiffPalette.Categories; category++)
             {
                 List<BlockRecord> blocks = Blocks(diff, category);
                 drawn += Draw(blocks, category, Swell(category));
                 asked += DiffPalette.Faded(category) ? 0 : blocks.Count;
+                surfaces += Surfaces(blocks);
+            }
+            if (surfaces > 0 || _surfaces > 0)
+            {
+                Log.Info("the diff holds " + surfaces + " build surface(s), of which " +
+                         _surfaces + " knew their own corners.");
             }
 
             // Counted against what was asked for rather than against the diff: a
@@ -158,6 +173,49 @@ namespace GitView
                 Log.Warn("the diff has " + asked + " blocks to draw but none could be " +
                          "drawn; the block types may not have placement ghosts.");
             }
+        }
+
+        /// <summary>The layer the machine's blocks are drawn on. See <see cref="Show"/>.</summary>
+        private int _drawLayer;
+
+        /// <summary>
+        /// The layer a machine's blocks are drawn on, taken off the first thing under
+        /// it that draws. Falls back to the root's own layer, which is right when the
+        /// root is a block rather than an empty parent.
+        /// </summary>
+        private static int LayerOfBlocks(Transform root)
+        {
+            Renderer drawn = root.GetComponentInChildren<Renderer>(true);
+            return drawn != null ? drawn.gameObject.layer : root.gameObject.layer;
+        }
+
+        /// <summary>Puts an object of ours on the layer the machine is drawn on.</summary>
+        private void OnMachineLayer(GameObject made)
+        {
+            Transform[] parts = made.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                parts[i].gameObject.layer = _drawLayer;
+            }
+        }
+
+        /// <summary>
+        /// How many of these blocks are build surfaces, resolved or not: a surface
+        /// that could not be followed to its corners is the one thing here that looks
+        /// like nothing at all, so it is worth being able to tell the two apart in
+        /// the log.
+        /// </summary>
+        private static int Surfaces(List<BlockRecord> blocks)
+        {
+            int found = 0;
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                if (blocks[i] != null && blocks[i].EdgeIds != null)
+                {
+                    found++;
+                }
+            }
+            return found;
         }
 
         /// <summary>The blocks of one category. The overlay's four are the diff's three and what it left alone.</summary>
@@ -190,6 +248,9 @@ namespace GitView
         /// <summary>Takes the shells down, remembering what they were.</summary>
         private void Wipe()
         {
+            // The machine may be loaded again between one diff and the next, and a
+            // table of its blocks does not survive that.
+            _live = null;
             if (_container != null)
             {
                 UnityEngine.Object.Destroy(_container);
@@ -329,6 +390,41 @@ namespace GitView
         {
             bool drawn = false;
 
+            // The edges and corner nodes a surface is made of are drawn by the
+            // surface, so they are not drawn again here. A node's own ghost is the
+            // little ball you drag the corner by, and a handful of those scattered
+            // over a changed surface said nothing the surface was not saying.
+            if (block.PartOfSurface)
+            {
+                return false;
+            }
+
+            // The blocks whose shape is not in their prefab: a build surface, whose
+            // outline is four corner blocks and whose edges are curves; a brace, a
+            // spring, a rope or a hose, which is stretched between two points and
+            // whose ghost is one end of it. What the machine is drawing for those is
+            // the only thing that is actually their shape, so it is copied -- see
+            // <see cref="CopyOfLive"/> -- and the shapes built here are what is left
+            // when there is nothing to copy, which is a block the version on screen
+            // deleted.
+            if (block.HasSurface || block.HasSpan)
+            {
+                GameObject copied = CopyOfLive(block.Id);
+                if (copied != null)
+                {
+                    Adopt(copied, category);
+                    if (block.HasSurface)
+                    {
+                        _surfaces++;
+                    }
+                    return true;
+                }
+            }
+            if (block.HasSurface && DrawSurface(block, category))
+            {
+                return true;
+            }
+
             GameObject ghost = Spawn(block);
             if (ghost != null)
             {
@@ -346,6 +442,320 @@ namespace GitView
                 drawn = DrawSpan(block, category) || drawn;
             }
             return drawn;
+        }
+
+        /// <summary>
+        /// Draws a build surface as the surface: a slab through its corners, a little
+        /// larger than the one it marks.
+        ///
+        /// Nothing Besiege can be asked for. A surface is nine blocks -- the surface,
+        /// four edges, four corner nodes -- and the ghost spawned for the surface
+        /// block itself is a mark at its own position, which is one of the corners:
+        /// a changed surface came out as one coloured corner with the rest of it
+        /// still the colour of the machine. The corners and the edges have no
+        /// placement ghost at all, being blocks nobody drags out of the menu.
+        ///
+        /// So the shape is built here, out of the corners the file names -- see
+        /// <see cref="BlockRecord.Corners"/>. Marks on the corners were drawn as well
+        /// for a while and are not any more: the whole surface says everything they
+        /// said, and it says it over the thing that changed rather than at its edges.
+        ///
+        /// False if the shape could not be built, and then the caller falls back to
+        /// the block's own ghost: a mark at one corner is a poor way to show a
+        /// surface, and it is a great deal better than showing nothing.
+        /// </summary>
+        private bool DrawSurface(BlockRecord block, int category)
+        {
+            _surfaces++;
+            GameObject sheet = Sheet(block.Corners, block.Thickness);
+            if (sheet == null)
+            {
+                return false;
+            }
+            Adopt(sheet, category);
+            return true;
+        }
+
+        /// <summary>
+        /// A copy of what the machine is drawing for this block, or null if the block
+        /// is not in the machine -- which is the case for anything the version on
+        /// screen removed.
+        ///
+        /// For the blocks whose shape is not in their prefab. A build surface's
+        /// outline is four other blocks and its edges are curves; a brace, a spring,
+        /// a rope or a hose is stretched between two points its ghost knows nothing
+        /// about. Both were being approximated -- a flat slab through the corners, a
+        /// tube along the span -- and the machine standing in front of the player has
+        /// the real thing on it, generated by the game from the same data.
+        ///
+        /// The meshes are copied, not the block. Instantiating a live block runs its
+        /// Awake, and a <c>BuildSurface</c> waking up registers itself with the
+        /// machine it finds itself in: the copy would be a real surface, in the real
+        /// machine, in the next save. A GameObject with a MeshFilter and a
+        /// MeshRenderer on it has no behaviour to run and cannot join anything.
+        /// </summary>
+        private GameObject CopyOfLive(string id)
+        {
+            GameObject real = LiveBlock(id);
+            if (real == null || _container == null)
+            {
+                return null;
+            }
+
+            Renderer[] drawn = real.GetComponentsInChildren<Renderer>(false);
+            Bounds box = new Bounds();
+            bool any = false;
+            for (int i = 0; i < drawn.Length; i++)
+            {
+                if (drawn[i] == null || !drawn[i].enabled)
+                {
+                    continue;
+                }
+                if (!any) { box = drawn[i].bounds; any = true; }
+                else { box.Encapsulate(drawn[i].bounds); }
+            }
+            if (!any)
+            {
+                return null;
+            }
+
+            // The holder stands at the middle of what is being copied, so that
+            // growing it a little -- the same trick every other shell plays, to be
+            // outside the thing it marks rather than fighting it for the same pixels
+            // -- grows it evenly instead of sliding it off the block.
+            GameObject holder = new GameObject("Surface");
+            holder.transform.SetParent(_container.transform, false);
+            holder.transform.position = box.center;
+            holder.transform.rotation = Quaternion.identity;
+
+            int made = 0;
+            for (int i = 0; i < drawn.Length; i++)
+            {
+                MeshFilter shape = drawn[i] == null || !drawn[i].enabled
+                    ? null : drawn[i].GetComponent<MeshFilter>();
+                if (shape == null || shape.sharedMesh == null)
+                {
+                    continue;
+                }
+                GameObject piece = new GameObject("Face", typeof(MeshFilter),
+                                                  typeof(MeshRenderer));
+                piece.GetComponent<MeshFilter>().sharedMesh = shape.sharedMesh;
+                piece.transform.SetParent(holder.transform, false);
+                piece.transform.position = drawn[i].transform.position;
+                piece.transform.rotation = drawn[i].transform.rotation;
+                piece.transform.localScale = Ratio(drawn[i].transform.lossyScale,
+                                                   holder.transform.lossyScale);
+                made++;
+            }
+            if (made == 0)
+            {
+                UnityEngine.Object.Destroy(holder);
+                return null;
+            }
+
+            holder.transform.localScale = Vector3.one * SurfaceSwell;
+            OnMachineLayer(holder);
+            return holder;
+        }
+
+        /// <summary>One scale as a fraction of another, per axis.</summary>
+        private static Vector3 Ratio(Vector3 want, Vector3 by)
+        {
+            return new Vector3(Mathf.Abs(by.x) < 0.0001f ? 1f : want.x / by.x,
+                               Mathf.Abs(by.y) < 0.0001f ? 1f : want.y / by.y,
+                               Mathf.Abs(by.z) < 0.0001f ? 1f : want.z / by.z);
+        }
+
+        /// <summary>
+        /// The block in the machine with this identifier, or null. Looked up through
+        /// a table built once per diff: a machine can hold a thousand blocks and a
+        /// diff can hold a hundred surfaces.
+        /// </summary>
+        private GameObject LiveBlock(string id)
+        {
+            if (_live == null)
+            {
+                _live = new Dictionary<string, GameObject>();
+                try
+                {
+                    Machine machine = Machine.Active();
+                    List<BlockBehaviour> blocks = machine == null
+                        ? null : machine.BuildingBlocks;
+                    for (int i = 0; blocks != null && i < blocks.Count; i++)
+                    {
+                        if (blocks[i] != null)
+                        {
+                            _live[blocks[i].Guid.ToString()] = blocks[i].gameObject;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Warn("could not list the machine's blocks: " + e.Message);
+                }
+            }
+
+            GameObject found;
+            return _live.TryGetValue(id ?? string.Empty, out found) ? found : null;
+        }
+
+        /// <summary>
+        /// The machine's blocks by identifier, for the length of one diff. Thrown
+        /// away with the overlay, since the next one is drawn over a machine that has
+        /// been loaded again.
+        /// </summary>
+        private Dictionary<string, GameObject> _live;
+
+        /// <summary>
+        /// How many build surfaces the last diff drew, for the log. Worth counting:
+        /// a surface that resolved and one that did not look the same on screen
+        /// unless you know which you are looking at.
+        /// </summary>
+        private int _surfaces;
+
+        /// <summary>
+        /// How far outside the real slab the mark round it is drawn: a little proud
+        /// of each face, and a little wider than the outline.
+        ///
+        /// It has to be *outside*. A build surface is a slab with a thickness the
+        /// player sets, so a flat sheet through its corners lies on the middle of it
+        /// -- sealed inside the block, drawn every frame and visible from nowhere,
+        /// which is exactly what the first attempt at this did. The other shells have
+        /// the same problem and solve it the same way, by being a few per cent larger
+        /// than the block they mark.
+        /// </summary>
+        private const float SurfaceSkin = 0.05f;
+        private const float SurfaceSwell = 1.02f;
+
+        /// <summary>
+        /// A slab through the given corners, a little larger than the surface it
+        /// marks: two faces and the rim between them.
+        ///
+        /// A mesh of ours rather than a primitive: the outline is a shape the player
+        /// dragged into whatever form they liked, and no primitive is that shape.
+        ///
+        /// Three things here are deliberately the blunt version, because a surface
+        /// that is not drawn is worse than one drawn a shade too generously:
+        ///
+        /// - The faces are fans from the *middle* rather than from the first corner,
+        ///   so an outline pulled into a dart is still covered.
+        /// - The plane is Newell's normal -- the whole outline rather than its first
+        ///   three corners, which say nothing when they happen to be in a line.
+        /// - Every triangle is wound both ways. Which way round the loop the walk
+        ///   came out is the file's business, so "the front" is not knowable, and a
+        ///   slab facing away from you is a slab you cannot see.
+        /// </summary>
+        private GameObject Sheet(Vector3[] corners, float thickness)
+        {
+            int n = corners.Length;
+            if (n < 3)
+            {
+                return null;
+            }
+            try
+            {
+                Vector3 middle = Vector3.zero;
+                for (int i = 0; i < n; i++)
+                {
+                    middle += corners[i];
+                }
+                middle /= n;
+
+                // Newell's method: the sum of the outline's own turns, which is the
+                // plane's normal for any polygon and does not care which three
+                // corners you happen to look at first.
+                Vector3 up = Vector3.zero;
+                for (int i = 0; i < n; i++)
+                {
+                    Vector3 here = corners[i];
+                    Vector3 next = corners[(i + 1) % n];
+                    up.x += (here.y - next.y) * (here.z + next.z);
+                    up.y += (here.z - next.z) * (here.x + next.x);
+                    up.z += (here.x - next.x) * (here.y + next.y);
+                }
+                if (up.sqrMagnitude < 1e-10f)
+                {
+                    // Every corner in one line: there is no plane to stand off from.
+                    up = Vector3.up;
+                }
+                up = up.normalized * (thickness * 0.5f + SurfaceSkin);
+
+                // The middle of each face, then its corners pushed out from that
+                // middle so the mark is a shade wider than what it marks.
+                Vector3[] points = new Vector3[(n + 1) * 2];
+                points[0] = middle + up;
+                points[n + 1] = middle - up;
+                for (int i = 0; i < n; i++)
+                {
+                    Vector3 out2 = middle + (corners[i] - middle) * SurfaceSwell;
+                    points[1 + i] = out2 + up;
+                    points[n + 2 + i] = out2 - up;
+                }
+
+                List<int> triangles = new List<int>();
+                for (int i = 0; i < n; i++)
+                {
+                    int next = (i + 1) % n;
+                    int topHere = 1 + i, topNext = 1 + next;
+                    int lowHere = n + 2 + i, lowNext = n + 2 + next;
+                    Face(triangles, 0, topHere, topNext);
+                    Face(triangles, n + 1, lowNext, lowHere);
+                    Face(triangles, topHere, lowHere, topNext);
+                    Face(triangles, topNext, lowHere, lowNext);
+                }
+
+                Mesh mesh = new Mesh();
+                mesh.name = "GitView Surface";
+                mesh.vertices = points;
+                mesh.triangles = triangles.ToArray();
+                mesh.RecalculateNormals();
+                mesh.RecalculateBounds();
+
+                GameObject sheet = new GameObject("Surface", typeof(MeshFilter),
+                                                  typeof(MeshRenderer));
+                sheet.GetComponent<MeshFilter>().sharedMesh = mesh;
+                OnMachineLayer(sheet);
+                Log.Info("drew a build surface of " + n + " corners, " +
+                         mesh.bounds.size + " across.");
+                return sheet;
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not draw a build surface: " + e.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// One triangle of the slab, added facing both ways. See <see cref="Sheet"/>
+        /// for why both.
+        /// </summary>
+        private static void Face(List<int> into, int a, int b, int c)
+        {
+            into.Add(a); into.Add(b); into.Add(c);
+            into.Add(c); into.Add(b); into.Add(a);
+        }
+
+        /// <summary>
+        /// One of Unity's shapes, with everything that makes it a physical object
+        /// taken off it. See <see cref="Sterilise"/>.
+        /// </summary>
+        private GameObject Primitive(PrimitiveType shape)
+        {
+            try
+            {
+                GameObject made = GameObject.CreatePrimitive(shape);
+                Sterilise(made);
+                // Built from nothing, so it starts on the default layer -- which the
+                // build area's camera need not be drawing.
+                OnMachineLayer(made);
+                return made;
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not draw an overlay shape: " + e.Message);
+                return null;
+            }
         }
 
         /// <summary>
@@ -377,19 +787,13 @@ namespace GitView
                 return false;
             }
 
-            GameObject tube;
-            try
+            // CreatePrimitive brings a collider, which is exactly what the placement
+            // ghosts had to have taken off them -- Primitive takes it off again.
+            GameObject tube = Primitive(PrimitiveType.Cylinder);
+            if (tube == null)
             {
-                tube = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            }
-            catch (Exception e)
-            {
-                Log.Warn("could not draw a dragged block's span: " + e.Message);
                 return false;
             }
-            // CreatePrimitive brings a collider, which is exactly what the placement
-            // ghosts had to have taken off them.
-            Sterilise(tube);
 
             tube.transform.localPosition = (from + to) * 0.5f;
             tube.transform.localRotation = Quaternion.FromToRotation(Vector3.up, along);

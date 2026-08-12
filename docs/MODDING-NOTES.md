@@ -287,30 +287,65 @@ which also returns early on `!enabled`), so a button with no collider receives
 nothing at all. With `LoadSaveButton` destroyed there is nothing left to switch it
 back on.
 
-Strip it, then, and accept the consequence: one of the behaviours you destroyed is
-what enables the plate renderer under the icon, so the copy draws its icon and
-nothing else — about three fifths the height of the buttons beside it, measured on
-screen. Draw the plate into your own icon and scale the whole copy until what it
-draws is as tall as what the original draws (`BrowserWatch.MatchSize`); the
-collider scales with it, so the clickable area still matches the visible one.
+Stripping it works and costs you the button: one of the behaviours you destroyed
+is what enables the plate renderer under the icon, so the copy draws its icon and
+nothing else — about three fifths the height of the buttons beside it, measured
+on screen — and the tooltip goes with it. Both then have to be imitated.
 
-### A copied button shows the *original's* tooltip
+**Keeping them is still the better trade** — it is what makes the tooltip below
+possible — but keep your expectations low about what it buys:
 
-`Tooltip` keeps what it shows in a private `tooltipParent` Transform, and that
-object is **not** a child of the button. Unity only redirects a copied reference
-when it points inside the copy, so `Instantiate(button)` gives you a Tooltip
-still pointing at the original's words: hovering the copy lights up the
-neighbour's tooltip, in the neighbour's place. Nothing about that is visible from
-the copy — rewriting every `TextMesh` under it changes nothing, because there are
-none — and the field cannot be repointed either, since reading a private field
-means reflection and the mod loader refuses the assembly for it.
+- **The plate is not the button's.** Copy a load button and you get a bare glyph
+  about three fifths the height of the buttons beside it, components or no
+  components: the dark square behind it belongs to the row rather than to the
+  control, and stays behind, exactly as the tooltip's words do.
+  **Copy the plate too** — find it as whatever is drawn *around* the original's
+  icon, searching from the button's parent since it may be a sibling, and
+  `Instantiate` it into the row at the same offset your button took. Painting a
+  plate into your own icon and scaling the button up instead fails twice over:
+  the scale is put back by whatever animates the hover swell, which sets it from
+  a size of its own remembering, and a plate inside the button swells with the
+  button, where the game's plates hold still and only the icon on them grows.
+- **The press stops working while the hover still does.** A press is finished in
+  `SimpleUIButton.LateUpdate`, which Unity does not call on a disabled behaviour,
+  while `Tooltip` is a behaviour of its own and carries on — so the symptom is a
+  button that shows its tooltip and does nothing when clicked. Something switches
+  the button off when the browser has nothing for it to act on. Setting `enabled`
+  back to true every frame is the fix; `ToggleButton(true)` is *not*, because it
+  returns without doing anything when the collider is not on the button's own
+  object.
+- Watching for the press yourself — down and up over your own collider — is worth
+  the fifteen lines. It works whatever state the button has been put in.
 
-So: destroy the `Tooltip` on the copy (before its `Start` runs, or its `Init`
-caches the original's renderers), and put up your own. `SimpleUIButton` has
-public `MouseEnter` / `MouseExit` delegates and a public `IsHovered`, which is
-all the hover there is to do; for the words, `Instantiate` the nearest `TextMesh`
-on screen and you inherit Besiege's font, size and material without naming any of
-them.
+Take off only what would fight you: `LoadSaveButton` itself, which holds the load
+and save icons and would paint one of them over yours, and the `Localisation.*`
+behaviours, which exist to put the game's own words back.
+
+### A copied button shows the *original's* tooltip — but you can repoint it
+
+`Tooltip` keeps what it shows in a `tooltipParent` Transform, and that object is
+**not** a child of the button. Unity only redirects a copied reference when it
+points inside the copy, so `Instantiate(button)` gives you a Tooltip still
+pointing at the original's words: hovering the copy lights up the neighbour's
+tooltip, in the neighbour's place, and rewriting every `TextMesh` under the copy
+changes nothing because there are none.
+
+`tooltipParent` is **public**, though, along with `timeToProc`, `useFadeOut`,
+`lerpPosDirection`, `Reset()` and `OnMouseExit()`. So: `Instantiate` the
+original's `tooltipParent` object, hang it off your button at the same offset it
+has from its own, point your `Tooltip` at the copy and call `Reset()`. That
+re-finds the renderers and texts under the parent it has now been given, works
+out which way the arrow points, and leaves everything switched off until the
+pointer arrives — and you get `LerpPosIn` and the fades, which is the animation
+you would otherwise be imitating. `TooltipOn` calls `ResizeBackground` every time
+it opens, so writing new text into the copied `TextMesh`es is all that changing
+the words takes.
+
+Two traps. `TooltipOn`/`TooltipOff` are private, and `TooltipOff` is the only
+thing that clears the `on` flag — a tooltip hidden by deactivating its button
+still thinks it is open and will not open again, so call the public
+`OnMouseExit()` before hiding the button. And `OnDisable` only turns the
+renderers off, which is not the same thing.
 
 ### A slot has nine buttons and shows one
 
@@ -688,6 +723,71 @@ The per-block skin type is the nested `BlockSkinLoader.SkinPack.Skin`, with a
 was loaded, which is why this mod treats an unresolved skin as "no skin" rather
 than guessing.
 
+### Some blocks are several blocks
+
+Two shapes in the palette are not one block in the file:
+
+- **Braces, fuel hoses and winch ropes** are one block that writes
+  `start-position` and `end-position` — two `Vector3`s in the block's own local
+  space, which come back through `TransformPoint`, so rotation *and* scale apply.
+  Nothing else writes those two keys, so recognising them by the data rather than
+  by a list of block types picks up modded blocks that drag the same way.
+- **A build surface is nine blocks.** The surface (id 73) writes
+  `edges`: a `String` of four guids separated by `|`. Each edge (id 72) writes
+  `start` and `end`: the guids of two corner nodes. Each node (id 71) is an
+  ordinary block whose `Position` is where that corner is, and it may be shared
+  with the surface next door — one real machine had 44 surfaces, 137 edges and
+  109 nodes.
+
+The consequences for a diff are worth spelling out. The surface's own `Position`
+is one of its corners, so a diff that only marks the block marks one corner of
+it. The nodes and edges have **no placement ghost** — nobody drags a corner out
+of the menu — so nothing is drawn for them either, and dragging a corner changes
+*only* the node: the surface's own position, rotation and `edges` list are
+identical before and after. A surface whose shape was pulled about therefore
+reads as unchanged unless the corner positions are folded into whatever
+fingerprint the diff compares.
+
+Resolving the shape needs the whole machine in hand — a guid means nothing until
+the block it names has been read — so it is a pass after parsing, not something a
+block can answer about itself. Walk the four edges as a loop rather than taking
+the nodes in the order they are named: the file does not promise an order, and a
+fan of triangles through four corners in the wrong order is a bow tie.
+
+The corner node **does** have a ghost, and it is the little ball you drag the
+corner by — so a diff that draws every changed block draws a scatter of balls
+around a surface as well as the surface. Whatever draws the surface should speak
+for its edges and nodes too, and skip them.
+
+**Its edges are curves, and the curve is not in the file.** `BuildEdgeBlock` saves
+`start` and `end` and nothing else; it rebuilds the shape at load time out of the
+two nodes and *its own transform*. `UpdateEdge` puts five points into a path —
+`start + q·a`, `start`, the edge block's own position, `end`, `end + q̄·b` — and
+`Interp(t)` runs a Catmull-Rom along it, so the edge block's position is the
+control point and a straight edge is one sitting at the midpoint.
+`BuildSurface.GetPointOnSurface(u, v)` is then a Coons patch: the bilinear of the
+corner nodes, plus the edge interpolations, minus the bilinear again.
+
+Replicating that is a lot of arithmetic to get subtly wrong, and there is a
+shortcut for three of the four cases: **the machine on screen has already
+generated the mesh**. Copy the block's `MeshFilter.sharedMesh` onto a plain
+GameObject rather than reimplementing the patch — exact curves, exact thickness,
+no maths. Only a *removed* surface has nothing to copy.
+
+Copy the meshes, **not the block**. `Instantiate` on a live block runs its Awake,
+and a `BuildSurface` waking up registers itself with the machine it finds itself
+in — the copy becomes a real surface in the real machine, and the next save has
+it. A GameObject carrying a MeshFilter and a MeshRenderer has no behaviour to run.
+
+Drawing a surface from scratch, for the case where there is nothing to copy: a
+flat sheet through the corners is *inside* the block — a surface is a slab as
+thick as its `bmt-thickness` — so it has to stand off both faces. Take the plane from the whole outline (Newell's method) rather
+than from its first three corners, which say nothing when those happen to be in a
+line; fan the faces from the middle rather than from a corner, so a dart-shaped
+outline is still covered; and wind every triangle both ways, because which way
+round the loop came out is the file's business and a slab facing away from you is
+a slab you cannot see.
+
 ## Drawing a ghost block
 
 `PrefabMaster.GetPrefab(BlockType, out BlockPrefab)` gives a `BlockPrefab`, and
@@ -701,6 +801,13 @@ call `IntersectWarning.WarningFromWorldPos`, which is the game's INTERSECTION
 banner. They work off trigger colliders. Every ghost a diff overlay draws sits
 exactly on a block of the machine, so an overlay of a dozen blocks raises a dozen
 intersection warnings the instant it appears.
+
+**Anything you build yourself has to be put on the machine's layer.** A ghost
+arrives on whatever layer Besiege authored it for; a `new GameObject` or a
+`GameObject.CreatePrimitive` starts on the default layer, which the build area's
+camera need not be drawing at all — so a shape of your own can be present, placed,
+painted and invisible, with nothing in the log. Take the layer off the first
+renderer under the machine's block root and set it on everything you make.
 
 Instantiate it, `SetActive(false)` before anything on it gets a frame, then strip
 every `MonoBehaviour`, `Collider` and `Rigidbody` out of the hierarchy and turn it

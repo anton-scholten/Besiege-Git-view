@@ -102,6 +102,28 @@ namespace GitView
 
         /// <summary>The one compare-them-all button, or null while the browser is shut.</summary>
         private GameObject _diffAll;
+
+        /// <summary>That button's own <c>SimpleUIButton</c>. See <see cref="KeepPressable"/>.</summary>
+        private SimpleUIButton _press;
+
+        /// <summary>
+        /// What the compare button can be hit on, taken before its tooltip was hung
+        /// off it -- the tooltip's own colliders are meant to stay switched off.
+        /// </summary>
+        private Collider[] _hits;
+
+        /// <summary>
+        /// The dark square behind the compare button: a copy of the one the load
+        /// buttons sit on, and not a child of ours. See <see cref="CopyPlate"/>.
+        /// </summary>
+        private GameObject _plate;
+
+        /// <summary>
+        /// Besiege's tooltip on that button, where one could be copied, and null
+        /// where a quad of ours is standing in for it.
+        /// </summary>
+        private Tooltip _tip;
+
         private bool _busy;
 
         public void Bind(HistoryView history)
@@ -114,6 +136,7 @@ namespace GitView
             // Every frame, unlike the rest of this: a tooltip that waited a quarter
             // of a second for the sweep would be a tooltip that lags the pointer.
             ShowTipOnHover();
+            KeepPressable();
 
             if (Time.unscaledTime < _nextPoll)
             {
@@ -996,7 +1019,10 @@ namespace GitView
         private const string FaceBranch = "branch";
         private const string FacePlus = "plus";
 
-        /// <summary>The branch on a dark square, for the row of buttons at the top.</summary>
+        /// <summary>
+        /// The branch on a dark square, for a button that draws its plate and its
+        /// picture on the same quad. See <see cref="BuildDiffAllButton"/>.
+        /// </summary>
         private const string FacePlated = "plated";
 
         /// <summary>The name of the face carrying a given number.</summary>
@@ -1348,14 +1374,26 @@ namespace GitView
                 {
                     // A button that goes away under the pointer is never told the
                     // pointer left, so its tooltip would be waiting, still shown,
-                    // the next time there is something to compare.
+                    // the next time there is something to compare. Besiege's own is
+                    // worse than shown: it remembers that it is open, and a tooltip
+                    // that thinks it is already open does not open again.
+                    if (_tip != null)
+                    {
+                        _tip.OnMouseExit();
+                    }
                     Transform tip = _diffAll.transform.FindChild(TipName);
-                    if (tip != null)
+                    if (tip != null && _tip == null)
                     {
                         Reveal(tip.gameObject, false);
                     }
                 }
                 _diffAll.SetActive(enough);
+            }
+            // The plate is not a child of the button -- it belongs to the row -- so
+            // it has to be shown and hidden with it by hand.
+            if (_plate != null && _plate.activeSelf != enough)
+            {
+                _plate.SetActive(enough);
             }
             if (enough)
             {
@@ -1364,17 +1402,31 @@ namespace GitView
         }
 
         /// <summary>
-        /// Copies one of the load buttons at the top of the screen.
+        /// Copies one of the load buttons at the top of the screen -- the whole
+        /// button, as it stands, with what it draws and how it behaves left on it.
         ///
         /// Copied from a neighbour, as everything else here is: it is the only way
         /// to be the same size, the same material and the same shape as the buttons
-        /// it stands beside. <c>LoadSaveButton</c> has no Awake and no Start, so a
-        /// copy of one does nothing on its own; the component goes anyway, along
-        /// with the localisation that would put "load machine" back over our own
-        /// text at the next language change.
+        /// it stands beside. It used to be copied and then stripped down to the one
+        /// component that makes it clickable, which cost it the plate under its icon
+        /// -- drawn back into our own texture -- and the animated tooltip, drawn back
+        /// as a quad of ours. Both were imitations of the button standing next to it.
+        ///
+        /// Two things come off, and only two: <c>LoadSaveButton</c>, which knows
+        /// which of "load" and "save" this is and would repaint our icon with one of
+        /// them, and anything from <c>Localisation</c>, which would put "load
+        /// machine" back over our own words at the next language change.
         /// </summary>
         private GameObject BuildDiffAllButton()
         {
+            // Whatever the last browser left behind went with it when the screen
+            // closed, and a destroyed object is not something to keep asking.
+            _press = null;
+            _tip = null;
+            _hits = null;
+            _plate = null;
+            _pressedOn = false;
+
             LoadSaveButton[] loads = FindObjectsOfType<LoadSaveButton>();
             if (loads == null || loads.Length == 0)
             {
@@ -1417,22 +1469,28 @@ namespace GitView
             clone.transform.localScale = rightmost.transform.localScale;
             clone.transform.localPosition = spot;
 
-            // Only the picture is repainted, and nothing is turned off: the plate
-            // under it is the button's own, drawn by a renderer of its own, and the
-            // glyph is the smallest thing the button draws. The plate is drawn into
-            // our texture as well, which costs nothing where the button's own is
-            // there -- black on black, and behind ours -- and leaves the icon
-            // looking deliberate where it is not.
+            // The button's own colliders, taken before the tooltip is hung off it:
+            // the tooltip brings colliders of its own, and those are meant to stay
+            // switched off. See KeepPressable.
+            _hits = clone.GetComponentsInChildren<Collider>(true);
+
+            // Only the picture is repainted, and nothing is turned off. The glyph
+            // goes on bare: the dark plate behind a load button is not part of the
+            // button, so the copy gets a copy of the plate as well -- see CopyPlate --
+            // rather than a plate painted into its own picture. Which matters for
+            // more than fidelity: the button swells under the pointer, and a plate
+            // inside the button swells with it, where the game's plates hold still
+            // and only the icon on them grows.
             Renderer face = IconRenderer(clone);
-            Strip(clone);
-            Texture2D plated = IconTexture(FacePlated);
-            if (face == null || !PaintOne(face, IconMaterial(plated), plated))
+            Undress(clone);
+            // Where no plate could be copied the glyph brings one of its own, so that
+            // the button is not the one bare mark in a row of plated ones -- a worse
+            // button than this, but a button.
+            bool plated = CopyPlate(rightmost.gameObject, clone);
+            Texture2D glyph = IconTexture(plated ? FaceBranch : FacePlated);
+            if (face == null || !PaintOne(face, IconMaterial(glyph), glyph))
             {
-                Remember(clone, plated);
-            }
-            else
-            {
-                MatchSize(clone, rightmost.gameObject, face);
+                Remember(clone, glyph);
             }
 
             SimpleUIButton button = clone.GetComponent<SimpleUIButton>();
@@ -1445,9 +1503,21 @@ namespace GitView
                 Destroy(clone);
                 return null;
             }
+            // Cleared rather than replaced: a copied button brings no delegates of
+            // its own, but a future Besiege that wires them up in Awake would have
+            // this one still loading a machine. Nothing of ours is added -- the press
+            // is watched for in KeepPressable, which works whether or not the button
+            // is in a state to notice it.
             button.ResetDelegates();
-            button.Click += new Click(delegate { OnDiffAllPressed(); });
-            AddTip(clone, button);
+            _press = button;
+
+            // Besiege's own tooltip where it can be had -- the plate that slides out
+            // from under the button and fades in -- and a quad of ours where it
+            // cannot.
+            if (!CopyTip(rightmost.gameObject, clone))
+            {
+                AddTip(clone, button);
+            }
             // The words belong to the button, and this is a new one -- the browser
             // takes the last with it when it closes. Without this the tooltip on the
             // second visit is a blank plate, because what it should say is what it
@@ -1459,55 +1529,186 @@ namespace GitView
         }
 
         /// <summary>
-        /// Grows a copied button until what it draws is the height of what the
-        /// button it was copied from draws.
+        /// Copies the tooltip off the button this one was copied from: the plate, the
+        /// arrow, the lettering and the slide it comes out with.
         ///
-        /// The copy draws its icon and nothing else -- the plate is another
-        /// renderer, and whatever switches that on cannot be kept (see
-        /// <see cref="Strip"/>). An icon quad is about three fifths of the plate it
-        /// sits on, measured on screen, so a copy that draws only its icon comes out
-        /// three fifths the size of the buttons beside it. Since our own plate fills
-        /// the icon, growing the whole button until the icon is plate-sized puts it
-        /// back in the row. The collider grows with it, so what can be clicked is
-        /// still what can be seen.
+        /// The words a tooltip shows live on a <c>tooltipParent</c> transform, and
+        /// that transform is not inside the button -- so a copy of the button points
+        /// at the *original's* words, in the original's place, which is what hovering
+        /// ours used to light up. Copying that object too, hanging it off our button
+        /// at the same offset it has from its own, and pointing our tooltip at the
+        /// copy gives us one of our own to write on.
+        ///
+        /// <c>Reset</c> is what makes it take: it re-finds every renderer and text
+        /// under the parent it has now been given, works out which way the arrow
+        /// points, and leaves the lot switched off until the pointer arrives. The
+        /// plate is resized to the words every time it opens, so ours can say
+        /// anything and be the right shape.
         /// </summary>
-        private static void MatchSize(GameObject clone, GameObject original,
-                                      Renderer face)
+        private bool CopyTip(GameObject original, GameObject clone)
         {
-            float want = DrawnHeight(original);
-            float have = face.bounds.size.y;
-            if (want <= 0.0001f || have <= 0.0001f)
+            Tooltip theirs = original.GetComponent<Tooltip>();
+            Tooltip mine = clone.GetComponent<Tooltip>();
+            if (theirs == null || mine == null || theirs.tooltipParent == null)
             {
-                return;
+                return false;
             }
-            float ratio = want / have;
-            if (ratio < 1.01f)
+
+            GameObject words =
+                Instantiate(theirs.tooltipParent.gameObject) as GameObject;
+            if (words == null)
             {
-                return;
+                return false;
             }
-            clone.transform.localScale = clone.transform.localScale * ratio;
-            Log.Info("compare-them-all button grown by " + ratio.ToString("0.##") +
-                     " to match the load buttons.");
+            words.name = TipName;
+
+            // Placed in the world rather than in the button's own space: our button
+            // has been grown to the size of the plate it stands on, and a tooltip
+            // laid out in its space would be grown with it. The same distance below
+            // our button as theirs is below its own, at the same size and facing the
+            // same way, whatever either button has been scaled to.
+            Transform at = words.transform;
+            at.SetParent(clone.transform, false);
+            at.localScale = Ratio(theirs.tooltipParent.lossyScale,
+                                  clone.transform.lossyScale);
+            at.rotation = theirs.tooltipParent.rotation;
+            at.position = clone.transform.position +
+                          (theirs.tooltipParent.position - original.transform.position);
+
+            Undress(words);
+            mine.tooltipParent = at;
+            try
+            {
+                mine.Reset();
+            }
+            catch (Exception e)
+            {
+                Log.Warn("could not set up the copied tooltip: " + e.Message);
+                Destroy(words);
+                return false;
+            }
+            _tip = mine;
+            return true;
         }
 
-        /// <summary>How tall everything a button draws is, together, in world units.</summary>
-        private static float DrawnHeight(GameObject button)
+        /// <summary>
+        /// Copies the dark plate the button it was copied from sits on, and puts it
+        /// behind ours.
+        ///
+        /// The plate is not part of the button. Copying a load button gets you a bare
+        /// glyph about three fifths the height of the buttons beside it, whatever you
+        /// keep on it, because the square behind it belongs to the row rather than to
+        /// the control -- the same trick the tooltip plays with its words.
+        ///
+        /// Two earlier attempts painted a plate into our own icon and grew the button
+        /// to match. Both came out small, and the reason is in the third screenshot:
+        /// the button swells under the pointer, and whatever swells it sets the scale
+        /// from a size it remembers -- so it puts back the size we grew it from, and
+        /// on the way it grows the plate as well, where the game's plates hold still
+        /// and only the icon on them moves.
+        ///
+        /// A copy of the plate, parented where the plate is rather than to the
+        /// button, has neither problem: it is the game's own square, at the game's
+        /// own size, and nothing animates it.
+        /// </summary>
+        private bool CopyPlate(GameObject original, GameObject clone)
         {
-            Renderer[] renderers = button.GetComponentsInChildren<Renderer>(false);
-            float top = float.MinValue;
-            float bottom = float.MaxValue;
-            for (int i = 0; i < renderers.Length; i++)
+            Renderer plate = PlateRenderer(original);
+            if (plate == null || plate.transform.parent == null)
             {
-                Renderer renderer = renderers[i];
-                if (renderer == null || !renderer.enabled ||
+                Log.Info("no plate found behind the load buttons to copy.");
+                return false;
+            }
+
+            GameObject copy = Instantiate(plate.gameObject) as GameObject;
+            if (copy == null)
+            {
+                return false;
+            }
+            copy.name = PlateName;
+            Undress(copy);
+            // A plate is something to look at. If the one we copied had a collider on
+            // it, ours would be a second thing in the row for the mouse to find.
+            Collider[] boxes = copy.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < boxes.Length; i++)
+            {
+                if (boxes[i] != null)
+                {
+                    boxes[i].enabled = false;
+                    Destroy(boxes[i]);
+                }
+            }
+
+            Transform at = copy.transform;
+            at.SetParent(plate.transform.parent, false);
+            at.localRotation = plate.transform.localRotation;
+            at.localScale = plate.transform.localScale;
+            // The same step to the right that our button took from theirs.
+            at.position = plate.transform.position +
+                          (clone.transform.position - original.transform.position);
+
+            _plate = copy;
+            copy.SetActive(false);
+            Log.Info("copied the plate behind the load buttons for the compare " +
+                     "button.");
+            return true;
+        }
+
+        /// <summary>
+        /// The plate behind a button: the thing drawn around it that its icon sits
+        /// inside.
+        ///
+        /// Searched from the button's parent rather than from the button, because the
+        /// plate need not be part of it -- and this way it is found whether it turns
+        /// out to be a sibling, a parent or a child. Anything much bigger than the
+        /// icon is not a plate but the panel the whole row is on, and copying that
+        /// would put a second load screen on the screen.
+        /// </summary>
+        private static Renderer PlateRenderer(GameObject button)
+        {
+            Renderer icon = IconRenderer(button);
+            Transform around = button.transform.parent;
+            if (icon == null || around == null)
+            {
+                return null;
+            }
+
+            Bounds want = icon.bounds;
+            Renderer best = null;
+            Renderer[] near = around.GetComponentsInChildren<Renderer>(false);
+            for (int i = 0; i < near.Length; i++)
+            {
+                Renderer renderer = near[i];
+                if (renderer == null || renderer == icon || !renderer.enabled ||
                     renderer.GetComponent<TextMesh>() != null)
                 {
                     continue;
                 }
-                top = Mathf.Max(top, renderer.bounds.max.y);
-                bottom = Mathf.Min(bottom, renderer.bounds.min.y);
+                // The one behind *this* button: the plate under the next button along
+                // does not contain this icon.
+                Bounds box = renderer.bounds;
+                if (!box.Contains(want.center) || box.size.y < want.size.y ||
+                    box.size.y > want.size.y * 3f)
+                {
+                    continue;
+                }
+                if (best == null || box.size.y < best.bounds.size.y)
+                {
+                    best = renderer;
+                }
             }
-            return top > bottom ? top - bottom : 0f;
+            return best;
+        }
+
+        /// <summary>The name given to the copied plate, so it can be found again.</summary>
+        public const string PlateName = "GitViewComparePlate";
+
+        /// <summary>One scale as a fraction of another, per axis.</summary>
+        private static Vector3 Ratio(Vector3 want, Vector3 by)
+        {
+            return new Vector3(Math.Abs(by.x) < 0.0001f ? 1f : want.x / by.x,
+                               Math.Abs(by.y) < 0.0001f ? 1f : want.y / by.y,
+                               Math.Abs(by.z) < 0.0001f ? 1f : want.z / by.z);
         }
 
         /// <summary>
@@ -1646,35 +1847,30 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes everything off a copied button but the <c>SimpleUIButton</c> that
-        /// makes it a button.
+        /// Takes off a copy the two things that would undo our own: the load button
+        /// itself, and anything that rewrites text in another language.
         ///
-        /// Keeping the rest was tried, to see whether one of them was what draws the
-        /// plate under the icon. It is not worth the price: the copy stopped
-        /// responding to the mouse altogether. Something on that button turns itself
-        /// off when the browser says it has nothing to act on --
-        /// <c>SimpleUIButton.ToggleButton</c> disables the *collider* as well as the
-        /// behaviour, and a button with no collider gets no mouse messages at all,
-        /// which is every click and every hover. With <c>LoadSaveButton</c> gone
-        /// there is nothing left to turn it back on.
+        /// Everything else stays. That is the point of copying a button -- the plate
+        /// it draws, the way it lights up, the tooltip that slides out from under it
+        /// are all things it does, and re-implementing them was a worse copy of a
+        /// button that was right there.
         ///
-        /// So: everything goes, and the plate is drawn into our own icon instead.
+        /// <c>LoadSaveButton</c> goes because it holds the load and save icons and
+        /// puts one of them on the renderer we are about to paint. The
+        /// <c>Localisation</c> behaviours go because they exist to put the game's own
+        /// words back over anything else, which is what our words would be.
         ///
-        /// <c>Tooltip</c> would have to go in any case. It keeps what it shows in a
-        /// private <c>tooltipParent</c>, and Unity only redirects a copied reference
-        /// when it points inside the copy. That one points outside, so the copy's
-        /// tooltip is the *original's* -- hovering ours lit up the load button's
-        /// words, in the load button's place, with nothing on our own object to
-        /// rewrite, and the field cannot be repointed without reflection.
-        /// <see cref="AddTip"/> puts up one of ours instead.
+        /// <c>DynamicText</c> goes with them for the same reason: it is what writes a
+        /// number or a key binding into a tooltip that has one, and this one does
+        /// not.
         /// </summary>
-        private static void Strip(GameObject clone)
+        private static void Undress(GameObject clone)
         {
             MonoBehaviour[] behaviours = clone.GetComponentsInChildren<MonoBehaviour>(true);
             for (int i = 0; i < behaviours.Length; i++)
             {
                 MonoBehaviour behaviour = behaviours[i];
-                if (behaviour == null || behaviour is SimpleUIButton)
+                if (behaviour == null || !Unwanted(behaviour))
                 {
                     continue;
                 }
@@ -1682,6 +1878,81 @@ namespace GitView
                 Destroy(behaviour);
             }
         }
+
+        /// <summary>
+        /// Whether a copied behaviour is one of the kinds that would undo our own
+        /// work.
+        ///
+        /// Named one at a time rather than matched on what the type is called.
+        /// Asking an object for the name of its type is <c>MemberInfo.get_Name</c>,
+        /// which is <c>System.Reflection</c>, which the mod loader refuses to load an
+        /// assembly for -- so the list is written out, and a localisation behaviour
+        /// the game adds later would have to be added here.
+        /// </summary>
+        private static bool Unwanted(MonoBehaviour behaviour)
+        {
+            return behaviour is LoadSaveButton
+                || behaviour is Localisation.LocalisationChild
+                || behaviour is Localisation.LocalisationChildClampingWidth;
+        }
+
+        /// <summary>
+        /// Keeps the copied button answering the mouse, and does its clicking.
+        ///
+        /// Two things are going on, and the last screenshot separated them: the
+        /// tooltip came up and the press did nothing. Both are driven by the same
+        /// mouse messages on the same collider, so the collider is fine -- what is
+        /// not is <c>SimpleUIButton</c> itself. A press is only *finished* in that
+        /// behaviour's <c>LateUpdate</c>, and Unity does not call LateUpdate on a
+        /// disabled behaviour, while <c>Tooltip</c> is a behaviour of its own and
+        /// carries on regardless. Something on that button switches the button off
+        /// when the browser has nothing for it to act on.
+        ///
+        /// So it is switched back on every frame -- directly, because
+        /// <c>ToggleButton</c> returns without doing anything when the collider is
+        /// not on the button's own object -- and the press is watched for here as
+        /// well rather than left to the button's own <c>Click</c>. This button is on
+        /// screen only when there is something to compare: if it can be seen it can
+        /// be pressed, whatever the browser thinks.
+        /// </summary>
+        private void KeepPressable()
+        {
+            if (_diffAll == null || !_diffAll.activeInHierarchy)
+            {
+                _pressedOn = false;
+                return;
+            }
+            if (_press != null && !_press.enabled)
+            {
+                _press.enabled = true;
+            }
+            for (int i = 0; _hits != null && i < _hits.Length; i++)
+            {
+                if (_hits[i] != null && !_hits[i].enabled)
+                {
+                    _hits[i].enabled = true;
+                }
+            }
+
+            // Pressed and released over the same button, which is what a click is.
+            bool over = PointerOver(_diffAll);
+            if (Input.GetMouseButtonDown(0))
+            {
+                _pressedOn = over;
+            }
+            else if (Input.GetMouseButtonUp(0))
+            {
+                bool clicked = _pressedOn && over;
+                _pressedOn = false;
+                if (clicked)
+                {
+                    OnDiffAllPressed();
+                }
+            }
+        }
+
+        /// <summary>Whether the press that is in progress started on our button.</summary>
+        private bool _pressedOn;
 
         // How big the tooltip is drawn and where it hangs, in button widths, off
         // Besiege's own: a plate a little over half the button's height with a
@@ -1782,7 +2053,9 @@ namespace GitView
         /// </summary>
         private void ShowTipOnHover()
         {
-            if (_diffAll == null || !_diffAll.activeInHierarchy)
+            // Besiege's own tooltip shows itself, off the same mouse messages the
+            // button hears; there is nothing to do here but stay out of its way.
+            if (_tip != null || _diffAll == null || !_diffAll.activeInHierarchy)
             {
                 return;
             }
@@ -1793,22 +2066,44 @@ namespace GitView
             }
         }
 
-        private static bool PointerOver(GameObject button)
+        /// <summary>
+        /// Whether the pointer is on the compare button.
+        ///
+        /// Asked of the colliders the button itself was copied with, kept from before
+        /// its tooltip was hung off it: the tooltip brings colliders of its own, and
+        /// a search for "a collider under this button" would find one of those and
+        /// answer about the wrong box.
+        /// </summary>
+        private bool PointerOver(GameObject button)
         {
+            Camera camera = Watching(button);
+            if (camera == null)
+            {
+                return false;
+            }
+            Ray ray = camera.ScreenPointToRay(Input.mousePosition);
+
+            if (_hits != null && _hits.Length > 0)
+            {
+                for (int i = 0; i < _hits.Length; i++)
+                {
+                    RaycastHit where;
+                    if (_hits[i] != null && _hits[i].enabled &&
+                        _hits[i].Raycast(ray, out where, 10000f))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             Collider box = button.GetComponent<Collider>();
             if (box == null)
             {
                 box = button.GetComponentInChildren<Collider>(true);
             }
-            Camera camera = box == null ? null : Watching(button);
-            if (camera == null)
-            {
-                return false;
-            }
-
             RaycastHit hit;
-            return box.Raycast(camera.ScreenPointToRay(Input.mousePosition), out hit,
-                               10000f);
+            return box != null && box.Raycast(ray, out hit, 10000f);
         }
 
         private static void Reveal(GameObject tip, bool shown)
@@ -1836,6 +2131,23 @@ namespace GitView
             Transform tip = button.transform.FindChild(TipName);
             if (tip == null)
             {
+                return;
+            }
+
+            // Besiege's tooltip is text, not a picture of text: the words go on the
+            // meshes the copy brought with it and the plate is resized round them
+            // every time it opens.
+            if (_tip != null)
+            {
+                _tipWords = words;
+                TextMesh[] lines = tip.GetComponentsInChildren<TextMesh>(true);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i] != null)
+                    {
+                        lines[i].text = words;
+                    }
+                }
                 return;
             }
 

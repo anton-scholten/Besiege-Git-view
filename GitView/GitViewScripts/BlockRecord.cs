@@ -70,6 +70,56 @@ namespace GitView
         public Vector3 SpanEnd;
 
         /// <summary>
+        /// The corners of a build surface, in the order they go round it, in the
+        /// same space as <see cref="Position"/>.
+        ///
+        /// A build surface is not one block but nine: the surface itself, four edges
+        /// and four corner nodes, each with a guid of its own. The surface names its
+        /// edges, an edge names the two nodes it runs between, and a node is where a
+        /// corner actually is -- so where the surface *is* can only be answered by
+        /// following those references through the rest of the machine, which is what
+        /// <c>VersionScan.LinkSurfaces</c> does once every block has been read.
+        ///
+        /// Filled in for the surface block. Null for everything else, including the
+        /// edges and nodes it is made of -- they are blocks in their own right and
+        /// keep their own rows in the count, but they draw nothing on their own:
+        /// there is no placement ghost for "a corner".
+        /// </summary>
+        public Vector3[] Corners;
+
+        /// <summary>True when this is a build surface whose corners were resolved.</summary>
+        public bool HasSurface
+        {
+            get { return Corners != null && Corners.Length >= 3; }
+        }
+
+        /// <summary>
+        /// How thick a build surface is drawn, which the player sets on the block.
+        /// The mark over it has to be thicker than that or it is drawn *inside* the
+        /// slab and cannot be seen at all. Besiege's own default where the block does
+        /// not say.
+        /// </summary>
+        public float Thickness = 0.08f;
+
+        // What the surface said before it was resolved: the guids it named. Kept on
+        // the record because linking happens after every block has been read, and
+        // this is where the answer was written down.
+        public string[] EdgeIds;
+        public string EdgeFrom = string.Empty;
+        public string EdgeTo = string.Empty;
+
+        /// <summary>
+        /// True for the edges and corner nodes a resolved build surface is made of.
+        ///
+        /// They are blocks like any other and are counted like any other, but they
+        /// are not drawn: the surface is drawn as the surface, and a corner node's
+        /// own placement ghost is the little ball you drag it by -- which appeared
+        /// scattered around a changed surface saying nothing the surface was not
+        /// already saying.
+        /// </summary>
+        public bool PartOfSurface;
+
+        /// <summary>
         /// How far two positions may differ and still count as the same place.
         ///
         /// Besiege writes coordinates as decimal text and reads them back through a
