@@ -9,9 +9,8 @@ namespace GitView
         public readonly List<BlockRecord> Added = new List<BlockRecord>();
 
         /// <summary>
-        /// Blocks that exist in both but were moved, rotated, rescaled, reskinned
-        /// or retuned. Held as they are in the *newer* version, because that is
-        /// where the overlay draws them.
+        /// Blocks in both, but moved, rotated, rescaled, reskinned or retuned. Held
+        /// as they are in the *newer* version, which is where the overlay draws them.
         /// </summary>
         public readonly List<BlockRecord> Changed = new List<BlockRecord>();
 
@@ -19,10 +18,9 @@ namespace GitView
         public readonly List<BlockRecord> Removed = new List<BlockRecord>();
 
         /// <summary>
-        /// Blocks that came through the save untouched, as they are in the newer
-        /// version. Held rather than counted because the overlay can draw them: not
-        /// part of the answer to "what changed", but the thing the answer is
-        /// attached to.
+        /// Blocks that came through the save untouched. Held rather than counted
+        /// because the overlay can draw them: not the answer to "what changed", but
+        /// the thing the answer is attached to.
         /// </summary>
         public readonly List<BlockRecord> Unchanged = new List<BlockRecord>();
 
@@ -35,40 +33,29 @@ namespace GitView
     /// <summary>
     /// Works out which blocks a save added, changed and removed.
     ///
-    /// The obvious implementation -- pair blocks up by the guid Besiege writes into
-    /// the .bsg -- is right most of the time and quietly wrong the rest. Measured
-    /// over the autosave folders of six real machines, a handful of blocks per save
-    /// come back with a guid they did not have a minute earlier while being
-    /// identical in every other respect; Besiege reissues them when blocks are
-    /// copied, mirrored, or re-added by an undo. Trusting the guid alone reports
-    /// those as a deletion and an addition of the same block in the same place,
-    /// which is the one thing a diff must never do.
-    ///
-    /// So the pairing happens in three passes, each one only looking at what the
-    /// pass before it could not place:
+    /// Pairing by the guid alone is right most of the time and quietly wrong the
+    /// rest: Besiege reissues a guid when a block is copied, mirrored or re-added by
+    /// an undo, and trusting it then reports a deletion and an addition of the same
+    /// block in the same place. So the pairing takes three passes, each looking only
+    /// at what the one before could not place:
     ///
     ///   1. equal guids -- the common case, and the only pass that can tell a block
     ///      that moved from a block that was replaced;
-    ///   2. equal in every other respect -- a reissued guid on an untouched block,
-    ///      paired up and reported as no change at all;
-    ///   3. same block type, nearest position within half a block -- a reissued
-    ///      guid on a block that also moved.
+    ///   2. equal in every other respect -- a reissued guid on an untouched block;
+    ///   3. same type, nearest position within half a block -- a reissued guid on a
+    ///      block that also moved.
     ///
-    /// Whatever is still unpaired really was added or removed. On the same six
-    /// machines this leaves about one unexplained block per folder, against nine
-    /// per save for the guid alone.
+    /// Whatever is still unpaired really was added or removed. Over six real
+    /// machines that leaves about one unexplained block per folder, against nine per
+    /// save for the guid alone.
     /// </summary>
     public static class BlockDiff
     {
         /// <summary>
-        /// How far a block may have moved and still be recognised as itself once
-        /// its guid has stopped matching.
-        ///
-        /// Only pass 3 uses this, so it does not govern moved blocks in general --
-        /// those keep their guid and are paired by pass 1 however far they travel.
-        /// It governs the much rarer case of a block that was both reissued and
-        /// moved, where beyond about half a block "deleted, and another one placed
-        /// nearby" is the more honest reading anyway.
+        /// How far a block may have moved and still be recognised as itself once its
+        /// guid has stopped matching. Pass 3 only: an ordinary moved block keeps its
+        /// guid however far it travels. Past about half a block, "deleted, and
+        /// another placed nearby" is the more honest reading anyway.
         /// </summary>
         public const float MatchRadius = 0.6f;
 
@@ -108,20 +95,14 @@ namespace GitView
         }
 
         /// <summary>
-        /// Makes sure no block is counted twice, and that a block which is both new
-        /// and altered is counted as new.
+        /// Makes sure no block is counted twice, added winning over changed.
         ///
-        /// The passes above pair each block at most once, so in an ordinary machine
-        /// this finds nothing. What it is for is a machine where two blocks carry the
-        /// same identifier -- which Besiege can produce, since it reissues them --
-        /// and one of the two pairs up while the other does not: the same block then
-        /// stands in both columns, and is drawn twice on the machine, once green and
-        /// once orange.
-        ///
-        /// Added wins. "There is something here that was not here before" is the
-        /// larger fact; that it also differs from a block it shares an identifier
-        /// with is bookkeeping, and counting it under both makes the two columns add
-        /// up to more blocks than the save has.
+        /// The passes above pair each block once, so on an ordinary machine this
+        /// finds nothing. It is for the machine holding two blocks with the same
+        /// identifier -- which Besiege can produce -- where one pairs up and the
+        /// other does not, leaving the same block in both columns and drawn twice,
+        /// once green and once orange. "There is something here that was not here
+        /// before" is the larger fact.
         /// </summary>
         private static void OnceEach(List<BlockRecord> added, List<BlockRecord> changed)
         {

@@ -12,22 +12,17 @@ namespace GitView
         public GameObject Root;
         public RectTransform Rect;
 
-        /// <summary>
-        /// The version's number, which is the button that pins this version as the
-        /// one to compare against. <see cref="Number"/> is its label.
-        /// </summary>
+        /// <summary>The circle left of the number, which pins this version.</summary>
         public Button Pin;
 
         /// <summary>
-        /// The block of colour behind the number, transparent until the row is
-        /// pinned. An image of ours rather than the button's own background -- see
-        /// <see cref="HistoryView.BuildNumber"/>.
+        /// The circle drawn inside that button: a ring, or a disc when pinned. An
+        /// image of ours rather than the button's own face -- see
+        /// <see cref="HistoryView.BuildPin"/>.
         /// </summary>
         public Image PinFill;
 
-        /// <summary>
-        /// The four bars that frame the row when it is the version on screen.
-        /// </summary>
+        /// <summary>The four bars that frame the row when it is the version on screen.</summary>
         public Image[] Edges;
 
         public Text Number;
@@ -48,48 +43,34 @@ namespace GitView
 
     /// <summary>
     /// The history window: every saved version of one machine, with its thumbnail,
-    /// when it was taken, and what it did to the machine.
-    ///
-    /// Built out of UI Factory's prefabs so it is Besiege's window rather than a
-    /// drawing of one, on its own canvas because Besiege's HUD is a Screen Space
-    /// Overlay canvas and Unity draws those over everything IMGUI produces.
+    /// when it was taken, and what it did to the machine. Built out of UI Factory's
+    /// prefabs so it is Besiege's window rather than a drawing of one, on a canvas of
+    /// its own above the game's HUD.
     /// </summary>
     public class HistoryView : MonoBehaviour
     {
         private const int CanvasOrder = 29000;
 
         /// <summary>
-        /// Wide enough for what is written in it and no wider.
-        ///
-        /// It has been narrowed twice over: once when the colour swatches left the
-        /// headings, which gave every count column back the 23 units it had notched
-        /// out of itself, and once by measuring what is actually written in a column
-        /// rather than leaving room for what might be. See the column table below.
+        /// Wide enough for what is written in it and no wider -- measured from what a
+        /// column actually holds rather than what it might. See the column table.
         /// </summary>
         private const float WindowWidth = 679f;
         private const float WindowHeight = 560f;
 
         /// <summary>
-        /// Where the window opens the first time, in canvas units from the middle
-        /// of a 1920x1080 canvas: up in the top left, clear of the toolbar across
-        /// the top and of the block palette along the bottom, leaving the machine
-        /// the whole right-hand side of the screen to be looked at in.
-        ///
-        /// The margin is the same on both sides of the corner: the window's top
-        /// edge sits at 389, which is 53 units under the toolbar, so its left edge
-        /// sits 53 units in from the screen's, at -907. That puts the middle of an
-        /// 850-wide window at -482. It used to be -547, which was the same
-        /// arithmetic for a window 130 units narrower -- when the blocks column
-        /// widened the window, the left margin was what paid for it, and the window
-        /// ended up against the edge of the screen.
+        /// Where the window opens the first time, in canvas units from the middle of a
+        /// 1920x1080 canvas: the top left, clear of the toolbar and the block palette,
+        /// leaving the machine the right-hand side of the screen. The same 53-unit
+        /// margin under the toolbar and in from the edge, which is why it is written
+        /// as arithmetic on the width rather than as a number.
         /// </summary>
         private static readonly Vector2 WindowHome =
             new Vector2(-960f + 53f + WindowWidth * 0.5f, 109f);
 
         /// <summary>
-        /// How far the window has to move before it is worth storing. Dragging it
-        /// changes the position every frame, and a preference does not need to
-        /// follow that; it needs to be right when the game closes.
+        /// How far the window has to move before it is worth storing: a drag changes
+        /// the position every frame, and a preference only has to be right at the end.
         /// </summary>
         private const float MovedEnough = 0.5f;
 
@@ -105,32 +86,25 @@ namespace GitView
         private const int HeaderFontSize = 13;
 
         /// <summary>
-        /// The counts are written at the size of the version number, which is the
-        /// other thing in a row worth reading from across the screen. The timestamp
-        /// stays smaller: it is the row's label rather than its answer, and at this
-        /// size it would not fit its column anyway.
+        /// The counts are written at the size of the version number, the other thing
+        /// in a row worth reading from across the screen. The timestamp stays smaller:
+        /// it is the row's label rather than its answer.
         /// </summary>
         private const int CountFontSize = NumberFontSize;
 
-        // Column edges as fractions of the row's width, and the padding inside
-        // one. One table, used by both the header and every row, so a heading and
-        // the values under it cannot drift apart.
+        // Column edges as fractions of the row's width, and the padding inside one.
+        // One table for both the header and every row, so a heading and the values
+        // under it cannot drift apart. Across a 643-unit row:
         //
-        // Across a 643-unit row:
-        //
-        //   132  the pin, the number and the picture, which are fixed sizes in pixels
-        //   155  the name and the time: 110 for a written-out timestamp, and enough
-        //        for the two headings that share the column to sit side by side with
-        //        air around each of them rather than butted together
+        //   132  the pin, the number and the picture, which are fixed pixel sizes
+        //   155  the name and the time: 110 for a written-out timestamp, and room for
+        //        the two headings that share the column to sit side by side
         //    89  each of the four counts
         //
-        // The count columns are set by what is written *above* them rather than in
-        // them. Measured off a screenshot rather than guessed, since Besiege's font
-        // is wide and letter-spaced and nothing about it can be asked before the
-        // window exists: "CHANGED" is 49 units at the header size and its pair of
-        // arrows another 24, so 89 leaves about 5 units of air on each side of the
-        // longest heading -- enough for the swell under the pointer and not a unit
-        // more.
+        // The count columns are set by what is written *above* them, measured off a
+        // screenshot: "CHANGED" is 49 units at the header size and its pair of arrows
+        // another 24, so 89 leaves about 5 units of air each side -- enough for the
+        // swell under the pointer and not a unit more.
         private const float ThumbEnd = 0.205f;
         private const float ThumbInset = 5f;
         private const float StampEnd = 0.446f;
@@ -140,30 +114,21 @@ namespace GitView
         private const float PadLeft = 9f;
         private const float PadRight = 13f;
 
-        // The version's place in the history, left of its thumbnail. In pixels
-        // rather than as a fraction of the row: it holds two digits for most
-        // machines and three for a well-worn one, and nothing else, so there is
-        // nothing for extra width to do.
+        // The version's place in the history, left of its thumbnail. In pixels rather
+        // than as a fraction of the row: it holds two or three digits and nothing
+        // else, so there is nothing for extra width to do.
         //
-        // Written on the row rather than on a button, because it is a fact about the
-        // version and not a thing to press. What is pressed is the circle to the
-        // left of it, which is the whole of what pinning looks like now: a small
-        // empty ring that fills with red when this is the version everything is
-        // being compared against. A number on a raised plate said "click me" about
-        // something that is really the row's name, and the plate under it was doing
-        // the work of a mark that is now its own control.
+        // Written on the row rather than on a button, being a fact about the version
+        // and not a thing to press. What is pressed is the circle to its left.
         private const float NumberWidth = 36f;
         private const float NumberGap = 6f;
         private const int NumberFontSize = 20;
 
         /// <summary>
         /// The pin circle: how far in from the row's edge it sits, how big it is, and
-        /// the gap between it and the number.
-        ///
-        /// Further in than the row's own padding, because the number beside it is
-        /// centred in a box wide enough for three digits: a two-digit number has six
-        /// units of air on its left and a one-digit twelve, and the circle was that
-        /// much further from the number it belongs to than it looked in the numbers.
+        /// the gap to the number. Further in than the row's own padding, because the
+        /// number is centred in a box wide enough for three digits and so sits six to
+        /// twelve units further off than it looks.
         /// </summary>
         private const float PinLeft = 16f;
         private const float PinSize = 22f;
@@ -174,11 +139,9 @@ namespace GitView
 
         /// <summary>
         /// How much of its button the circle fills at rest, and under the pointer.
-        ///
-        /// The growing is the button's hover, done by swapping the picture for a
-        /// bigger one rather than by scaling anything: UI Factory's own swell is a
-        /// few per cent, which on a control this small is half a unit and reads as
-        /// nothing at all.
+        /// The growing is done by swapping the picture rather than scaling anything:
+        /// UI Factory's own swell is a few per cent, which on a 22-unit circle is
+        /// half a unit and reads as nothing.
         /// </summary>
         private const float PinRest = 0.80f;
         private const float PinOver = 1f;
@@ -193,58 +156,44 @@ namespace GitView
         private const float HeaderGap = 3f;
 
         /// <summary>
-        /// The thumbnail's side. Square by construction rather than by a number
-        /// that has to be kept in step with the row's height: Besiege writes them
-        /// 512x512, and a rectangle of any other proportion visibly squashes one.
+        /// The thumbnail's side, square by construction rather than by a number kept
+        /// in step with the row's height: Besiege writes them 512x512.
         /// </summary>
         private const float ThumbSize = RowHeight - RowGap - ThumbInset * 2f;
 
         /// <summary>
-        /// Where the source column ends: the right edge of the thumbnail, which is
-        /// the last thing in it. Its heading is measured against this, so the two
-        /// cannot come apart.
+        /// Where the first column ends: the right edge of the thumbnail. Its heading
+        /// is measured against this, so the two cannot come apart.
         /// </summary>
         private const float SourceEnd = NumberLeft + NumberWidth + NumberGap + ThumbSize;
 
-        // The colour swatch that opens a column's picker, and the room it takes out
-        // of that column's heading. Every unit here is a unit the heading does not
-        // get, so it is as small as it can be and still be worth aiming at.
-        private const float SwatchWidth = 18f;
-        private const float SwatchGap = 2f;
-
         /// <summary>
         /// Where the name heading gives way to the time heading, halfway across the
-        /// column the two of them share.
-        ///
-        /// The name is on the left because that is where the name is: a row writes
-        /// it on the first line and the time under it, both flush with the column's
-        /// left edge, so the heading nearest the start of the text should be the one
-        /// naming the text that starts there.
+        /// column they share. The name is on the left because that is where the name
+        /// is: a row writes it on the first line and the time under it.
         /// </summary>
         private const float NameEnd = 0.326f;
 
         // The frame that marks the row being shown: how thick its bars are and how
-        // far inside the row's edge they sit. The inset matters for more than a
-        // margin -- a row is a rounded rectangle, and a frame drawn hard against its
-        // edge would have square corners sticking out past the rounded ones.
+        // far inside the row's edge they sit. A row is a rounded rectangle, so a
+        // frame drawn hard against its edge would poke square corners out past the
+        // rounded ones.
         private const float EdgeThickness = 2f;
         private const float EdgeInset = 3f;
 
         /// <summary>
-        /// What a canvas takes one unit to be, which is the number a repeating sprite
-        /// has to be created at to repeat at the size it was drawn. Unity's default
-        /// for <c>Canvas.referencePixelsPerUnit</c>, and ours is left at it.
+        /// What a canvas takes one unit to be: the number a repeating sprite has to be
+        /// created at to repeat at the size it was drawn. Unity's default for
+        /// <c>Canvas.referencePixelsPerUnit</c>, and ours is left at it.
         /// </summary>
         private const float CanvasPixelsPerUnit = 100f;
 
-
-        private static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
         private static readonly Color ClearTint = new Color(1f, 1f, 1f, 0f);
 
         /// <summary>
-        /// The disc behind the pin circle, in place of the rounded square the button
-        /// prefab draws. Sampled off the plate it replaces, so that the one round
-        /// control in the list is the same shade as everything else on a row.
+        /// The disc behind the pin circle, in place of the rounded square the prefab
+        /// draws. Sampled off the plate it replaces, so the one round control in the
+        /// list is the same shade as everything else.
         /// </summary>
         private static readonly Color PlateFill =
             new Color(0.078f, 0.110f, 0.165f, 1f);
@@ -255,10 +204,8 @@ namespace GitView
         private static readonly Color PressFill = new Color(1f, 1f, 1f, 0.18f);
 
         /// <summary>
-        /// The colour Besiege marks a chosen thing with -- the red on the block
-        /// panel's selected option. Taken from UI Factory's copy of the game's
-        /// palette rather than sampled off a screenshot, with the same value
-        /// written out as a fallback in case that class ever moves.
+        /// The red Besiege marks a chosen thing with, out of UI Factory's copy of the
+        /// game's palette, with the same value written out in case that class moves.
         /// </summary>
         private static Color SelectedFill
         {
@@ -326,15 +273,15 @@ namespace GitView
 
         /// <summary>
         /// Which counting pass is the current one. A pass reads a file a frame and
-        /// takes about a second over a long history, which is plenty of time for the
-        /// player to change what the counts are measured from; the older pass checks
-        /// this and gives up rather than writing numbers nobody asked for any more.
+        /// takes about a second over a long history -- time enough for the player to
+        /// change what the counts are measured from, and the older pass then gives up
+        /// rather than writing numbers nobody asked for.
         /// </summary>
         private int _countPass;
 
         /// <summary>
-        /// Whether the player has the window open -- which is not the same as
-        /// whether it is on screen, since it steps aside while a menu is up.
+        /// Whether the player has the window open, which is not whether it is on
+        /// screen: it steps aside while a menu is up.
         /// </summary>
         private bool _wanted;
         private bool _saidWaiting;
@@ -355,10 +302,9 @@ namespace GitView
         /// Shows the history of one machine. Safe to call again with a different
         /// machine; the previous one's rows and overlay are dropped.
         ///
-        /// <paramref name="chosen"/> says which kind of list this is: machines the
-        /// player picked out one at a time, or the versions of one machine. Only the
-        /// first column's name turns on it -- what the number in it *means* is the
-        /// one thing that differs between the two, and it is worth saying which.
+        /// <paramref name="chosen"/> says which kind of list this is: machines picked
+        /// out one at a time, or the versions of one machine. Only the first column's
+        /// name turns on it, that being where the difference shows.
         /// </summary>
         public void Open(string machineName, List<VersionEntry> versions, bool chosen)
         {
@@ -367,11 +313,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes the list, without deciding anything about what to show from it.
-        /// Separate from <see cref="Open"/> so that a caller can pin and choose
-        /// *before* the window is built: the counting pass reads the pin when it
-        /// starts, so setting one afterwards would leave every count answering the
-        /// question that was asked a moment earlier.
+        /// Takes the list, without deciding what to show from it. Separate from
+        /// <see cref="Open"/> so a caller can pin and choose *before* the window is
+        /// built: the counting pass reads the pin when it starts.
         /// </summary>
         private void Prepare(string machineName, List<VersionEntry> versions,
                              bool chosen)
@@ -385,14 +329,10 @@ namespace GitView
             _base = null;
             _ghosts.Clear();
 
-            // A list of machines you picked out opens in the order you picked them,
-            // newest choice at the top, so the first one you chose is at the bottom.
-            // That is the way the arrow then runs -- up from the source to the
-            // machine being looked at -- and it is the order the marks in the load
-            // screen were in. Sorting a hand-picked list by time was the old default
-            // and means nothing: most of those machines have no time, and the ones
-            // that do were saved in an order that has nothing to do with why they
-            // were put together.
+            // A hand-picked list opens in the order you picked them, newest choice at
+            // the top, which is the order the marks in the load screen were in. Sorting
+            // one by time means nothing: most of those machines have no time, and the
+            // ones that do were saved in an order unrelated to why they were compared.
             if (_chosen)
             {
                 _sortColumn = RowSort.ByNumber;
@@ -403,15 +343,9 @@ namespace GitView
 
         /// <summary>
         /// Shows a list and opens it on its own first row, which is what the compare
-        /// buttons in the load screen do.
-        ///
-        /// The top row against the one under it, and nothing pinned. That is the
-        /// list's own default reading -- every row is the difference between it and
-        /// the row below -- so the window opens showing the same thing the column of
-        /// counts beside it is showing, and the arrow joins two rows that are next to
-        /// each other. It opened pinned to the far end of the list before, which
-        /// answered a bigger question but made the first row's counts mean something
-        /// different from every other row's.
+        /// buttons in the load screen do: the top row against the one under it, with
+        /// nothing pinned. That is the list's own default reading, so the window opens
+        /// showing what the counts beside it are showing.
         /// </summary>
         public void OpenNewest(string machineName, List<VersionEntry> versions,
                                bool chosen)
@@ -461,18 +395,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Shows the window when the player wants it and the game is not busy
-        /// showing something of its own.
-        ///
-        /// This is how Besiege's own block mapper behaves: open a menu over the
-        /// build area — escape, load, options — and the panel goes away rather than
-        /// floating over the top of it, and comes back when the menu does. The
-        /// overlay in the world goes with it, because a machine covered in red
-        /// ghosts is not what you want to be looking at while picking a different
-        /// machine to load.
-        ///
-        /// The player's own answer is kept separately in <c>_wanted</c>, so a menu
-        /// opening and closing does not undo a window they had deliberately hidden.
+        /// Shows the window when the player wants it and the game is not busy showing
+        /// something of its own -- which is how Besiege's block mapper behaves. The
+        /// overlay goes with it: a machine covered in red ghosts is not what you want
+        /// to look at while picking a different machine to load. The player's own
+        /// answer is kept in <c>_wanted</c>, so a menu cannot undo it.
         /// </summary>
         private void Apply()
         {
@@ -490,8 +417,8 @@ namespace GitView
 
             if (_wanted && !showing && !_saidWaiting)
             {
-                // Said once, because a window that is open and invisible is
-                // otherwise indistinguishable from one that failed to build.
+                // Said once: a window that is open and invisible is otherwise
+                // indistinguishable from one that failed to build.
                 _saidWaiting = true;
                 Log.Info("the history window is waiting for the game's own menu to close.");
             }
@@ -499,23 +426,15 @@ namespace GitView
 
         /// <summary>
         /// True while there is nothing for the window to be over: a menu is up, the
-        /// HUD is hidden, or the player has left the build area altogether for the
-        /// main menu, the level selector or a level that is still loading.
+        /// HUD is hidden, or the player has left the build area for the main menu, the
+        /// level selector or a level still loading. The window and its canvas outlive
+        /// scene loads -- they have to, or the history would be lost whenever a level
+        /// was opened -- so nothing else stops them being drawn over the main menu.
         ///
-        /// The window and its canvas outlive scene loads -- they have to, or the
-        /// history would be lost every time a level was opened -- so nothing stops
-        /// them being drawn over the main menu unless it is checked for.
-        ///
-        /// <c>StatMaster</c> is not part of the stable Modding namespace and can
-        /// change without notice, so a failure here means "not busy" -- a window
-        /// that fails to hide is a great deal better than one that never appears.
-        ///
-        /// "There is no machine" is not on the list, though it used to be. The level
-        /// editor is a build area like any other and its load screen is the same load
-        /// screen, but an editor with nothing placed in it has no active machine --
-        /// so that test hid the window in the one place a player had just asked for
-        /// it. What it was really guarding against is the main menu, and
-        /// <c>isMainMenu</c> says that directly.
+        /// <c>StatMaster</c> is not part of the stable Modding namespace, so a failure
+        /// here means "not busy": a window that fails to hide beats one that never
+        /// appears. "There is no machine" is deliberately not on the list -- an empty
+        /// level editor has none, and that is exactly where a player asked for this.
         /// </summary>
         private static bool GameIsBusy()
         {
@@ -534,10 +453,9 @@ namespace GitView
 
         private void Update()
         {
-            // Polled rather than driven off StatMaster.inMenuChanged: that is a
-            // plain static Action, so subscribing to it means remembering to
-            // unsubscribe, and getting that wrong leaves a destroyed window being
-            // called into. Two static reads a frame is not worth the risk.
+            // Polled rather than driven off StatMaster.inMenuChanged, which is a
+            // plain static Action: subscribing means remembering to unsubscribe, and
+            // getting that wrong leaves a destroyed window being called into.
             if (_built)
             {
                 Apply();
@@ -552,15 +470,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Drops the overlay when the player empties the machine.
-        ///
-        /// The shells hang off whatever the blocks are parented to, so clearing the
-        /// machine leaves them where they were: a diff of a machine that is no longer
-        /// there, in mid-air, with nothing underneath it. It is not the same thing as
-        /// a level change, where the shells are destroyed along with everything else
-        /// and <see cref="RedrawOverlay"/> puts them back -- here they survive and are
-        /// simply wrong, so they go and do not come back until another version is
-        /// clicked.
+        /// Drops the overlay when the player empties the machine. The shells hang off
+        /// whatever the blocks are parented to, so clearing leaves them in mid-air
+        /// with nothing underneath. Not the same as a level change, where they are
+        /// destroyed with everything else and <see cref="RedrawOverlay"/> puts them
+        /// back; here they survive and are simply wrong.
         /// </summary>
         private void NoteMachineCleared()
         {
@@ -582,18 +496,12 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts the overlay back after a level change.
+        /// Puts the overlay back after a level change, which destroys and rebuilds
+        /// everything the shells were parented to. Besiege carries the machine across,
+        /// so the diff is still true of it; only the objects drawing it were lost.
         ///
-        /// The shells hang off the transform the machine's blocks are parented to,
-        /// and loading a level destroys and rebuilds all of it -- so a diff being
-        /// shown when the player opens another level is simply gone, while the
-        /// window listing it is still there saying otherwise. Besiege carries the
-        /// machine across, so the diff is still true of it; only the objects
-        /// drawing it were lost.
-        ///
-        /// Retried on a timer rather than every frame because the first attempts
-        /// after a level change will fail: the machine exists before its blocks do,
-        /// and there is nothing to parent to until they arrive.
+        /// Retried on a timer rather than every frame, because the first attempts fail
+        /// -- the machine exists before its blocks do.
         /// </summary>
         private void RedrawOverlay()
         {
@@ -606,10 +514,9 @@ namespace GitView
             {
                 return;
             }
-            // Waited for rather than assumed: the machine object exists before its
-            // blocks do, and the shells are parented to whatever the blocks are
-            // parented to. Drawing early would hang them off the machine's own
-            // transform, which is a different place.
+            // Waited for rather than assumed: drawing before the blocks arrive would
+            // hang the shells off the machine's own transform, which is a different
+            // place from whatever the blocks are parented to.
             if (machine.BuildingBlocks == null || machine.BuildingBlocks.Count == 0)
             {
                 return;
@@ -619,12 +526,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Notices the window being dragged.
-        ///
-        /// Polled rather than hooked, for the same reason as the menu check and one
-        /// more: the drag is UI Factory's, on a component of its window prefab, and
-        /// it reports nothing. Where the rect ended up is the only account of it
-        /// there is.
+        /// Notices the window being dragged. Polled rather than hooked: the drag is UI
+        /// Factory's and reports nothing, so where the rect ended up is the only
+        /// account of it there is.
         /// </summary>
         private void NotePosition()
         {
@@ -643,23 +547,18 @@ namespace GitView
         }
 
         /// <summary>
-        /// How much of a window has to stay on screen: enough of its title bar to
-        /// get hold of, and enough across for that to be worth aiming at.
+        /// How much of a window has to stay on screen: enough of the title bar to take
+        /// hold of, and enough across to be worth aiming at.
         /// </summary>
         private const float HeldWidth = 120f;
         private const float HeldHeight = 34f;
 
         /// <summary>
         /// Pulls a window back if it has been dragged off the screen, and answers
-        /// where it ended up.
-        ///
-        /// A window is dragged by its title bar, so a window dragged out past the
-        /// edge takes the only thing that can bring it back with it -- and this one
-        /// remembers where it was put, so it is still out there the next time the
-        /// game starts. Enough of the bar is kept on screen to grab.
-        ///
-        /// Public and static because the colours window has the same problem and no
-        /// reason to solve it differently.
+        /// where it ended up. A window is dragged by its title bar, so one dragged out
+        /// past the edge takes the only thing that could bring it back -- and the
+        /// position is remembered, so it would still be out there next time. Public
+        /// and static because the colours window has the same problem.
         /// </summary>
         public static Vector2 KeepOnScreen(RectTransform window)
         {
@@ -703,10 +602,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts anything changed since the last call on disk. Called when the
-        /// player is finished with something -- a picker closed, the window hidden,
-        /// the game quit -- rather than as it changes, since a drag or a slider
-        /// changes it many times a second and none of those are the answer.
+        /// Puts anything changed since the last call on disk. Called when the player
+        /// is finished with something -- a picker closed, the window hidden, the game
+        /// quit -- since a drag changes things many times a second.
         /// </summary>
         private void Store()
         {
@@ -773,10 +671,9 @@ namespace GitView
             }
 
             _windowRect = UIF.Rect(_window);
-            // Anchored and pivoted in the middle by us rather than however the
-            // prefab was authored, so that a stored position means one thing: an
-            // offset in canvas units from the middle of the screen. Anything else
-            // and a remembered position depends on a prefab we do not own.
+            // Anchored and pivoted in the middle by us rather than however the prefab
+            // was authored, so a stored position means one thing: canvas units from
+            // the middle of the screen.
             _windowRect.anchorMin = new Vector2(0.5f, 0.5f);
             _windowRect.anchorMax = new Vector2(0.5f, 0.5f);
             _windowRect.pivot = new Vector2(0.5f, 0.5f);
@@ -797,14 +694,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Keeps a position on screen.
-        ///
-        /// Worth doing even for the default: the canvas matches on height, so a
-        /// screen narrower than 16:9 has fewer canvas units across than the layout
-        /// assumes. It matters more for a stored one -- the position is remembered
-        /// across sessions, and nothing stops the player changing resolution or
-        /// monitor between them, which would otherwise leave the window remembered
-        /// somewhere off the edge with no way back to it.
+        /// Keeps a position on screen. Worth doing even for the default, since the
+        /// canvas matches on height and a screen narrower than 16:9 has fewer units
+        /// across than the layout assumes -- and more so for a stored one, which was
+        /// written on whatever monitor the player had last time.
         /// </summary>
         private Vector2 Fit(Vector2 at)
         {
@@ -821,93 +714,45 @@ namespace GitView
 
         private void SetTitle(string title)
         {
-            Transform bar = _window.transform.FindChild("TopBar");
-            if (bar == null)
-            {
-                return;
-            }
-            Text label = bar.GetComponentInChildren<Text>(true);
-            UIF.Style(label, 0, TextAnchor.MiddleCenter);
-            if (label != null)
-            {
-                label.text = string.IsNullOrEmpty(title) ? "HISTORY" : title.ToUpper();
-                // A title is to be read, not pressed. Its box is the whole width of
-                // the bar and it is drawn over the two controls in the corner, so
-                // while it took the pointer the cog only answered on whatever part of
-                // it the title did not reach.
-                label.raycastTarget = false;
-            }
+            UIBuild.SetTitle(UIBuild.TitleBar(_window),
+                             string.IsNullOrEmpty(title) ? "HISTORY" : title.ToUpper());
         }
 
         /// <summary>
         /// The two controls at the right-hand end of the title bar: the cross that
         /// shuts the window, and the cog that opens the options.
-        ///
-        /// Both are squared off against the bar rather than left the size the prefab
-        /// authored them -- see <see cref="UIBuild.SquareInBar"/> -- so that the one
-        /// we add and the one UI Factory supplies are the same control at the same
-        /// size, which is the only way a pair of buttons in a corner look deliberate.
         /// </summary>
         private void HookCloseButton()
         {
-            Transform bar = _window.transform.FindChild("TopBar");
+            RectTransform bar = UIBuild.TitleBar(_window);
             if (bar == null)
             {
                 return;
             }
-            RectTransform barRect = bar as RectTransform;
-
-            Transform close = bar.FindChild("CloseButton");
-            if (close != null)
-            {
-                UIBuild.SquareInBar(close as RectTransform, barRect, 0);
-                // The prefab's own handler may already hide the window; adding to it
-                // is what makes sure the overlay goes with it either way.
-                UIF.OnClick(close.gameObject, delegate { SetVisible(false); });
-            }
-            GearButton(barRect, close == null ? 0 : 1);
-        }
-
-        /// <summary>The cog beside the cross: everything that is a setting rather than a row.</summary>
-        private void GearButton(RectTransform bar, int place)
-        {
-            UIBuild.BarButton(bar, place, "Options", GearSprite(), QuietInk,
+            int place = UIBuild.HookClose(bar, delegate { SetVisible(false); });
+            // The cog beside the cross: everything that is a setting rather than a row.
+            UIBuild.BarButton(bar, place, "Options", GearSprite(), UIBuild.QuietInk,
                               ShowOptions);
         }
 
         /// <summary>
-        /// The cog: the Clippy mod's settings mark, the one in the corner of its
-        /// dialogue bubble, drawn to that icon's own radii.
-        ///
-        /// Drawn rather than asked for. UI Factory's bundle cannot be listed -- see
-        /// the notes -- so asking the game for its own cog is a guess at a name, and
-        /// this is a mark that already exists in a mod beside this one.
+        /// The cog: the Clippy mod's settings mark, drawn to that icon's own radii.
+        /// Drawn rather than asked for -- UI Factory's bundle cannot be listed, so
+        /// asking the game for its own cog is a guess at a name.
         /// </summary>
         private static Sprite GearSprite()
         {
             if (_gearFace == null)
             {
-                _gearFace = Drawn(IconArt.Gear(GearPixels));
+                _gearFace = UIBuild.Drawn(IconArt.Gear(GearPixels));
             }
             return _gearFace;
         }
 
-        /// <summary>One of our own drawings, as a sprite.</summary>
-        internal static Sprite Drawn(Texture2D texture)
-        {
-            texture.hideFlags = HideFlags.HideAndDontSave;
-            Sprite made = Sprite.Create(texture,
-                                        new Rect(0f, 0f, texture.width, texture.height),
-                                        new Vector2(0.5f, 0.5f));
-            made.hideFlags = HideFlags.HideAndDontSave;
-            return made;
-        }
-
         /// <summary>
-        /// Opens the options window, or shuts it if it is already open.
-        ///
-        /// Parented to the canvas rather than to this window: it is a window in its
-        /// own right, and one dragged inside another cannot be moved out of its way.
+        /// Opens the options window, or shuts it if it is open. Parented to the canvas
+        /// rather than to this window: one window dragged inside another cannot be
+        /// moved out of its way.
         /// </summary>
         private void ShowOptions()
         {
@@ -926,7 +771,7 @@ namespace GitView
 
         /// <summary>
         /// Takes over the scroll view the Window prefab ships with, and makes room
-        /// above it for the column headers.
+        /// above and below it for the headers and the status line.
         /// </summary>
         private bool FindScrollView()
         {
@@ -960,44 +805,33 @@ namespace GitView
             return true;
         }
 
-        // The arrow drawn from the machine a diff is measured *from* to the machine
-        // it is measured *to*. Three bars and a head, in the scrolling content so
-        // that it moves with the rows it joins.
-        //
-        // It runs down the outside of the list rather than across it: the rows are
-        // full of numbers, and a line drawn over them would be crossing out the
-        // answer it is pointing at. The strip to the left of the numbers is the only
-        // part of a row with nothing in it.
+        // The arrow from the machine a diff is measured *from* to the machine it is
+        // measured *to*. Three bars and a head, in the scrolling content so it moves
+        // with the rows it joins. Down the outside of the list rather than across it:
+        // a line drawn over the rows would be crossing out the answer it points at.
         private const float ArrowSpine = 4f;
         private const float ArrowInk = 2.5f;
         private const float ArrowHead = 16f;
         private const float ArrowHeadHalf = 10f;
 
         /// <summary>
-        /// How much of that the head at the end is drawn at. Smaller than the ones
-        /// down the run: those are read at a glance from anywhere in the list, while
-        /// this one is next to the circle it is pointing at and only has to reach it.
+        /// How much of that size the head at the end is drawn at. Smaller than the
+        /// ones down the run: it sits beside the circle it points at and only has to
+        /// reach it.
         /// </summary>
         private const float TipShare = 0.6f;
 
         /// <summary>
-        /// How far into a row the arrow goes at each end: the near edge of the pin
-        /// circle, and a couple of units over it.
-        ///
-        /// The edge rather than the middle, now that the head is twice the size it
-        /// was: a head that reaches the centre of a 22-unit circle covers most of
-        /// the circle, and the circle is the thing it is pointing out. Touching it is
-        /// enough -- the line leaves the filled circle and arrives at the empty one,
-        /// so the arrow and the circles read as one drawing.
+        /// How far into a row the arrow reaches: the near edge of the pin circle and a
+        /// couple of units over it. The edge rather than the middle, since a head that
+        /// reached the centre would cover the circle it is pointing out.
         /// </summary>
         private const float ArrowReach = RowMargin + PinLeft + 3f;
 
         // The heads along the vertical run, and how much line each one wants to
-        // itself. A long list puts the two ends of a comparison a screen apart, and
-        // the line between them then says everything except which way round it is --
-        // the one head, at the far end, may not even be on screen. These say it the
-        // whole way down. Five at most, because past that it is a dashed line rather
-        // than an arrow.
+        // itself. A long list puts the two ends of a comparison a screen apart, with
+        // the head at the far end off screen -- so these say which way it runs the
+        // whole way down. Five at most, past which it is a dashed line, not an arrow.
         private const int ArrowMarks = 5;
         private const float ArrowMarkSpace = 130f;
 
@@ -1034,25 +868,16 @@ namespace GitView
         {
             if (_headFace == null)
             {
-                Texture2D drawn = IconArt.Head(GearPixels);
-                drawn.hideFlags = HideFlags.HideAndDontSave;
-                _headFace = Sprite.Create(drawn,
-                                          new Rect(0f, 0f, drawn.width, drawn.height),
-                                          new Vector2(0.5f, 0.5f));
-                _headFace.hideFlags = HideFlags.HideAndDontSave;
+                _headFace = UIBuild.Drawn(IconArt.Head(GearPixels));
             }
             return _headFace;
         }
 
         /// <summary>
-        /// Points the arrow at the two machines the diff on screen is between: out
-        /// of the number of the one it is measured from, down the outside of the
-        /// list, and back in at the number of the one being looked at.
-        ///
-        /// Which two those are is not a question about rows. It is
-        /// <see cref="Baseline"/> -- the pinned machine, or the one before this in
-        /// time -- so the arrow says what the status line says, and follows the list
-        /// as it is sorted rather than joining whichever rows happen to be adjacent.
+        /// Points the arrow at the two machines the diff on screen is between: out of
+        /// the circle of the one it is measured from, down the outside of the list,
+        /// back in at the circle of the one being looked at. Which two those are is
+        /// <see cref="Baseline"/>, so the arrow always says what the status line says.
         /// </summary>
         private void PointArrow()
         {
@@ -1080,9 +905,8 @@ namespace GitView
             Bar(_arrow[1], ArrowSpine, Mathf.Min(startY, endY) - half, ArrowInk,
                 Mathf.Abs(endY - startY) + ArrowInk);
             // Up to where the head begins, which is not where a full-sized head would
-            // have begun: the head is drawn at a share of its own size, and a line
-            // that stopped short of it left the point floating clear of the arrow it
-            // belongs to.
+            // have begun -- the head is drawn at a share of its own size, and a line
+            // stopping short of it leaves the point floating.
             Bar(_arrow[2], ArrowSpine, endY - half,
                 Mathf.Max(0f, ArrowReach - ArrowSpine - ArrowHead * TipShare),
                 ArrowInk);
@@ -1093,13 +917,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts a few heads down the vertical run, all pointing the way the line is
-        /// going.
-        ///
-        /// Spaced out rather than counted: what matters is that a head is never far
-        /// from wherever you are looking, and a list long enough to scroll can put
-        /// both ends of the arrow off screen at once. Between one and
-        /// <see cref="ArrowMarks"/> of them, each with about
+        /// Puts a few heads down the vertical run, pointing the way the line goes.
+        /// Spaced rather than counted, so a head is never far from wherever you are
+        /// looking: between one and <see cref="ArrowMarks"/>, each with about
         /// <see cref="ArrowMarkSpace"/> of line to itself.
         /// </summary>
         private void MarkSpine(float startY, float endY)
@@ -1111,9 +931,8 @@ namespace GitView
             float span = Mathf.Abs(endY - startY);
             int wanted = Mathf.Clamp(Mathf.FloorToInt(span / ArrowMarkSpace), 1,
                                      _arrowMarks.Length);
-            // Evenly along the run, and never on top of either end: at n marks the
-            // first sits one nth of the way down and the last one nth from the
-            // bottom, which is what dividing by n + 1 does.
+            // Evenly along the run and never on top of either end, which is what
+            // dividing by n + 1 does.
             float step = span / (wanted + 1);
             float top = Mathf.Min(startY, endY);
             bool down = endY > startY;
@@ -1139,9 +958,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// One head on the vertical run, centred on the line and turned to face
-        /// along it. The head is drawn pointing right, so the picture is the same one
-        /// the arrow ends with, turned a quarter of the way round.
+        /// One head on the vertical run, centred on the line and turned to face along
+        /// it: the same picture the arrow ends with, a quarter turn round.
         /// </summary>
         private static void Mark(Image mark, float middleX, float middleY, bool down)
         {
@@ -1149,10 +967,9 @@ namespace GitView
             rect.anchorMin = new Vector2(0f, 1f);
             rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            // Long rather than square: turned on its side, what was the head's base
-            // becomes its width, and the line runs four units from the edge of the
-            // scrolling area -- anything broader would have its left side cut off by
-            // the mask.
+            // Long rather than square: turned on its side the head's base becomes its
+            // width, and the line runs four units from the edge of the scrolling area,
+            // so anything broader is cut off by the mask.
             rect.sizeDelta = new Vector2(ArrowHead, ArrowHeadHalf);
             rect.anchoredPosition = new Vector2(middleX, -middleY);
             rect.localEulerAngles = new Vector3(0f, 0f, down ? -90f : 90f);
@@ -1180,9 +997,8 @@ namespace GitView
             }
             if (shown || _arrowMarks == null)
             {
-                // How many of the marks are wanted is MarkSpine's business; it is
-                // called next. Hiding them all here is only for the case where there
-                // is no arrow at all.
+                // How many marks are wanted is MarkSpine's business, and it is called
+                // next; this is only for the case where there is no arrow at all.
                 return;
             }
             for (int i = 0; i < _arrowMarks.Length; i++)
@@ -1196,8 +1012,7 @@ namespace GitView
 
         /// <summary>
         /// One piece of the arrow, in the content's own space: pixels from its
-        /// top-left corner, y downwards. Put last, so the arrow draws over the rows
-        /// it is joining rather than under whichever were built after it.
+        /// top-left corner, y downwards. Put last, so it draws over the rows it joins.
         /// </summary>
         private static void Bar(Image bar, float left, float top, float width,
                                 float height)
@@ -1216,14 +1031,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// The column headings, in the strip the scroll view has just given up.
-        ///
-        /// Placed by measuring the scrolling area rather than by anchoring to the
-        /// window: what the rows are laid out across is the scroll view's viewport,
-        /// which is inset inside the window by however much the prefab's frame and
-        /// scrollbar take. A heading anchored to the window is that much wider than
-        /// the rows beneath it, and every column drifts by a share of the
-        /// difference — which is exactly what it looked like.
+        /// The column headings, in the strip the scroll view has just given up. Placed
+        /// by measuring rather than anchoring to the window: the rows are laid out
+        /// across the viewport, which is inset by however much the prefab's frame and
+        /// scrollbar take, so an anchored heading drifts off its column.
         /// </summary>
         private void BuildHeader()
         {
@@ -1231,16 +1042,14 @@ namespace GitView
             UIBuild.PlaceStrip(rect, _viewport, _window.transform as RectTransform,
                                HeaderHeight, true);
             // Vertically off the scrolling area, horizontally off the box the rows
-            // are actually laid out in, less the margin they sit inside. Measured
-            // rather than worked out from the viewport's width, which is what this
-            // did: the two are not the same box, so every heading sat a little left
-            // of its column and the numbers under them looked pushed to the right.
+            // are actually laid out in, less the margin they sit inside: the viewport
+            // and the content are not the same box.
             UIBuild.MatchWidth(rect, _content, _window.transform as RectTransform,
                                RowMargin);
 
-            // The one column of text, under two headings: what a row is called and
-            // when it was saved are two different orders to want it in, and the row
-            // writes both -- the name on the first line, the time on the second.
+            // One column of text under two headings: what a row is called and when it
+            // was saved are two different orders to want it in, and the row writes
+            // both -- the name on the first line, the time on the second.
             _headers[RowSort.ByName] = HeaderButton(rect, RowSort.ByName, ThumbEnd,
                                                     NameEnd);
             _headers[RowSort.ByTime] = HeaderButton(rect, RowSort.ByTime, NameEnd,
@@ -1257,18 +1066,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// The name of the leftmost column: the version's number, its picture, and
-        /// the button that makes it the version everything is compared with.
-        ///
-        /// Across the whole column -- the numbers and the pictures beside them --
-        /// rather than over the numbers alone, which is where it started and where
-        /// it would not fit. "SOURCE ▲▼" is wider than a strip sized for two
-        /// digits, and a heading centred on that strip has to hang off both ends of
-        /// its own button to be centred at all; there is nothing to the left of it
-        /// but the window's edge, so the room it needs can only come from the
-        /// right. Taking the picture in too is what makes the button wide enough
-        /// for the word to sit inside it with air around it, at every width the
-        /// window can be dragged to, since both are measured in pixels.
+        /// The heading over the leftmost column: the pin, the number and the picture.
+        /// Across the whole column rather than over the numbers alone -- "VERSION ▲▼"
+        /// is wider than a strip sized for three digits, and the only room it can
+        /// borrow is the picture's.
         /// </summary>
         private void SourceHeading(RectTransform parent)
         {
@@ -1292,13 +1093,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes a colour the player has just changed through to everything drawn
-        /// in it: the counts in the list and the shells over the machine.
-        ///
-        /// The headings used to carry a block of colour each, which opened that
-        /// colour's picker. Both are gone: the colours are chosen together in the
-        /// options window, and a column already says which colour it is in -- its
-        /// numbers are written in it.
+        /// Takes a colour the player has just changed through to everything drawn in
+        /// it: the counts in the list and the shells over the machine.
         /// </summary>
         private void Recolour(int category)
         {
@@ -1310,10 +1106,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes a new shell size through to the overlay. Nothing is drawn again for
-        /// it: every shell hangs off a pivot at its own middle, and this is those
-        /// pivots being scaled -- which is what makes it usable while the slider is
-        /// being dragged.
+        /// Takes a new shell size through to the overlay. Nothing is drawn again --
+        /// every shell hangs off a pivot at its own middle, and this scales those --
+        /// which is what makes it usable while the slider is being dragged.
         /// </summary>
         private void Rescale()
         {
@@ -1322,19 +1117,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// One clickable column heading, centred in its column above centred
-        /// values.
+        /// One clickable column heading, centred in its column above centred values.
         ///
-        /// Centred rather than pushed to the column's edge, and not only because
-        /// Besiege centres the labels on its own panel buttons. An edge-aligned
-        /// label has to be inset from that edge by exactly what the values below it
-        /// are inset by, and that inset cannot be applied reliably: UIFactory's
-        /// button keeps its label somewhere down a hierarchy of its own, so
-        /// stretching "the label" insets it inside whatever container it happens to
-        /// sit in rather than inside the button. The heading came out twenty pixels
-        /// off its column and no arithmetic here could say why. A centred label is
-        /// indifferent to all of it -- it only needs its container to be centred in
-        /// the button, which it is.
+        /// Centred rather than pushed to the column's edge: an edge-aligned label has
+        /// to be inset by exactly what the values below it are inset by, and that
+        /// cannot be applied reliably -- UIFactory keeps its label down a hierarchy of
+        /// its own, so stretching "the label" insets it inside whatever container it
+        /// sits in. A centred label only needs its container centred in the button.
         /// </summary>
         private Text HeaderButton(RectTransform parent, int column, float from, float to)
         {
@@ -1344,11 +1133,8 @@ namespace GitView
                 return null;
             }
             // Gapped like the rows, so the headings read as the same family of
-            // buttons rather than as one bar chopped into pieces. Every column
-            // gives up the width of a swatch on its left, and the saved column one
-            // more for the clock; the values under them stay where they are, since
-            // those belong to the column rather than to the heading.
-            UIF.Span(UIF.Rect(button), from, to, Inset(column), HeaderGap);
+            // buttons rather than as one bar chopped into pieces.
+            UIF.Span(UIF.Rect(button), from, to, HeaderGap, HeaderGap);
             return Heading(button, column);
         }
 
@@ -1360,26 +1146,17 @@ namespace GitView
                                      TextAnchor.MiddleCenter);
             if (label != null)
             {
-                label.color = QuietInk;
+                label.color = UIBuild.QuietInk;
                 UIF.StretchInset(label.rectTransform, 0f, 0f, 0f);
             }
 
-            // Left pivoted in the middle, so the hover swell grows evenly either
-            // side and a centred label stays where it is.
+            // Pivoted in the middle, so the hover swell grows evenly either side and
+            // a centred label stays where it is.
             UIF.PivotAnimation(button, 0.5f);
 
             int captured = column;
             UIF.OnClick(button, delegate { SortBy(captured); });
             return label;
-        }
-
-        /// <summary>
-        /// How far a heading is pushed off the left edge of its column by the
-        /// controls that live there.
-        /// </summary>
-        private static float Inset(int column)
-        {
-            return HeaderGap;
         }
 
         private void BuildStatusLine()
@@ -1389,11 +1166,9 @@ namespace GitView
             {
                 return;
             }
-            // Anchored inside the window's own bottom edge rather than measured off
-            // the scrolling area the way the header is. The viewport reaches the
-            // bottom of the frame, so "just below the viewport" is just below the
-            // window -- which is where this line ended up, floating on the scenery
-            // under it.
+            // Anchored inside the window's bottom edge rather than measured off the
+            // scrolling area the way the header is: the viewport reaches the bottom of
+            // the frame, so "just below the viewport" is outside the window.
             RectTransform rect = UIF.Rect(text);
             rect.anchorMin = new Vector2(0f, 0f);
             rect.anchorMax = new Vector2(1f, 0f);
@@ -1405,7 +1180,7 @@ namespace GitView
             _status = UIF.Label(text, 13, TextAnchor.MiddleCenter);
             if (_status != null)
             {
-                _status.color = QuietInk;
+                _status.color = UIBuild.QuietInk;
                 _status.text = string.Empty;
             }
         }
@@ -1413,9 +1188,9 @@ namespace GitView
         // --------------------------------------------------------------------- rows
 
         /// <summary>
-        /// Works out which version the one on screen is being compared with, and
-        /// keeps it: every row asks whether it is that one, and answering it per row
-        /// would sort the whole list per row.
+        /// Works out which version the one on screen is compared with, and keeps it:
+        /// every row asks whether it is that one, and answering per row would search
+        /// the whole list per row.
         /// </summary>
         private void NoteSource()
         {
@@ -1474,17 +1249,13 @@ namespace GitView
         /// <summary>
         /// Puts each column of numbers under the word above it.
         ///
-        /// Measured, because two things that ought to line up by arithmetic do not.
-        /// A heading is centred in its column of the header strip and the numbers are
-        /// centred in the same column of a row, and the strip and the row are laid
-        /// out inside different boxes -- so the two columns agree to within a few
-        /// units rather than exactly. And a heading is not only its word: it carries
-        /// the pair of sort arrows in the same label, which push the word left of the
-        /// middle by half their own width. Both together left every number sitting
-        /// visibly right of its heading.
+        /// Measured, because two things that ought to line up by arithmetic do not:
+        /// the header strip and a row are laid out inside different boxes, so their
+        /// columns agree to within a few units rather than exactly, and a heading
+        /// carries the pair of sort arrows in the same label -- which pushes the word
+        /// left of the middle by half their width.
         ///
-        /// Once, since none of it moves afterwards: the window is a fixed width, and
-        /// the arrows are the same two glyphs whichever column is sorted.
+        /// Once, since none of it moves afterwards.
         /// </summary>
         private void AlignCounts()
         {
@@ -1493,9 +1264,9 @@ namespace GitView
             if (_aligned || space == null || _rows.Count == 0 ||
                 !_window.activeInHierarchy)
             {
-                // Nothing is measured off a window that is not on screen. Asked
-                // again after every fill, so a first one that arrives before the
-                // window does costs a frame rather than the alignment.
+                // Nothing is measured off a window that is not on screen. Asked again
+                // after every fill, so a first one that arrives too early costs a
+                // frame rather than the alignment.
                 return;
             }
 
@@ -1526,8 +1297,7 @@ namespace GitView
 
         /// <summary>
         /// How much of a heading is arrows: what it measures with them less what it
-        /// measures without. Asked of the font that is drawing it, rather than
-        /// assumed -- the glyphs are Besiege's and their width is its business.
+        /// measures without, asked of the font that is drawing it.
         /// </summary>
         private float ArrowsWidth(Text heading, int column)
         {
@@ -1578,31 +1348,27 @@ namespace GitView
             }
 
             // Inset and gapped rather than edge to edge, so the rows read as the
-            // stack of separate buttons Besiege's own panels are made of instead of
-            // as one banded table.
+            // stack of separate buttons Besiege's own panels are made of.
             row.Rect = UIF.Rect(row.Root);
             row.Rect.anchorMin = new Vector2(0f, 1f);
             row.Rect.anchorMax = new Vector2(1f, 1f);
             row.Rect.pivot = new Vector2(0.5f, 1f);
             row.Rect.sizeDelta = new Vector2(-RowMargin * 2f, RowHeight - RowGap);
             // A row is far too wide to swell under the pointer without throwing its
-            // own text about; it lights up instead. Repaint wires that up, because
-            // what "lit" means depends on whether the row is the chosen one.
+            // own text about; it lights up instead.
             UIF.NoSwell(row.Root);
 
-            // The prefab's own label is in the way of the columns, but destroying it
-            // is not safe -- other UIFactory behaviours write to it -- so it is
-            // emptied and pushed out of the way instead.
+            // The prefab's own label is in the way of the columns. Emptied rather
+            // than destroyed: other UIFactory behaviours write to it.
             Text ownLabel = row.Root.GetComponentInChildren<Text>(true);
             if (ownLabel != null)
             {
                 ownLabel.text = string.Empty;
             }
 
-            // Opaque white, and left that way. uGUI's colour transition multiplies
-            // the state's colour by the graphic's own, so an image created
-            // transparent stays invisible whatever it is told to become -- which is
-            // exactly how the hover veil lost its first attempt at a colour.
+            // Opaque white, and left that way: uGUI's colour transition multiplies
+            // the state's colour by the graphic's own, so an image created transparent
+            // stays invisible whatever it is told to become.
             row.Highlight = UIBuild.AddImage(row.Rect, "Selected", Color.white);
             UIF.Stretch(row.Highlight.rectTransform, 0f, 0f);
             row.Highlight.raycastTarget = false;
@@ -1624,25 +1390,18 @@ namespace GitView
             thumb.offsetMax = new Vector2(thumbLeft + ThumbSize, -ThumbInset);
             row.Thumbnail.raycastTarget = false;
 
-            // The counts are centred under centred headings -- see HeaderButton for
-            // why the headings are centred rather than aligned to their column's
-            // edge. The timestamps are the exception: they are all the same length
-            // and read as a list rather than as a column of figures, so they line
-            // up on the left, next to the thumbnails. Their heading stays centred
-            // over the column like the rest.
+            // The counts are centred under centred headings -- see HeaderButton. The
+            // timestamps are the exception: all the same length and read as a list
+            // rather than a column of figures, so they line up on the left.
             row.Stamp = Cell(row.Rect, "Stamp", ThumbEnd, StampEnd, TextAnchor.MiddleLeft,
-                             RowFontSize);
-            // The counts are inset by what their headings are inset by, and by the
-            // same amount on both sides, so a centred number lands under a centred
-            // heading. Anything else -- the row's own left and right padding, say --
-            // puts the two out by half the difference between them.
+                             RowFontSize, PadLeft, PadRight);
+            // Inset by what their headings are inset by, the same on both sides, so a
+            // centred number lands under a centred heading.
             row.Blocks = Count(row.Rect, "Blocks", StampEnd, BlocksEnd);
             row.Added = Count(row.Rect, "Added", BlocksEnd, AddedEnd);
             row.Changed = Count(row.Rect, "Changed", AddedEnd, ChangedEnd);
             row.Removed = Count(row.Rect, "Removed", ChangedEnd, 1f);
-            // A row built after the columns were measured takes the same nudge: what
-            // was measured is where the columns are, which has nothing to do with
-            // which row is being built.
+            // A row built after the columns were measured takes the same nudge.
             if (_aligned)
             {
                 ShiftCounts(row);
@@ -1651,23 +1410,16 @@ namespace GitView
             HistoryRow captured = row;
             row.Button = UIF.OnClick(row.Root, delegate { Choose(captured); });
 
-            // Wired once, because it no longer depends on anything: the highlight is
-            // the pointer's veil and nothing else, whether this row is the chosen
-            // one or not. Before anything can see the white it was created with.
+            // Wired once: the highlight is the pointer's veil and nothing else,
+            // whether this row is the chosen one or not.
             UIF.HoverTint(row.Button, row.Highlight, ClearTint, HoverFill, PressFill);
             return row;
         }
 
         /// <summary>
         /// The version's number, written on the row, and the circle beside it that
-        /// pins it as the one every other version is compared against.
-        ///
-        /// Two things again, and for a reason: a version's number is a fact about it
-        /// -- where it comes in the history, what the load screen called it -- and
-        /// pinning is something you do. They were one control, which meant the
-        /// number wore a raised plate and looked like a button because the pin
-        /// needed one, and the mark for "this is the source" was a whole square of
-        /// red where a dot would do.
+        /// pins it. Two things, because a version's number is a fact about it and
+        /// pinning is something you do.
         /// </summary>
         private void BuildNumber(HistoryRow row)
         {
@@ -1678,15 +1430,14 @@ namespace GitView
         }
 
         /// <summary>
-        /// The circle that pins a version: empty until it is the one being compared
-        /// against, filled red when it is, and the end the arrow is drawn from.
+        /// The circle that pins a version: an empty ring until it is the one being
+        /// compared against, filled red when it is, and the end the arrow leaves from.
         ///
-        /// A button of UI Factory's rather than one drawn here, so it hovers and
-        /// presses like every other button in the game -- the circle is a picture
-        /// inside it, because the button's own face is the prefab's to colour and a
-        /// mark we set on it would be put back the moment the pointer left. A button
-        /// inside a button works out on its own: uGUI hands a click to the innermost
-        /// thing that handles it, so pinning a row does not also load it.
+        /// A button of UI Factory's, so it hovers and presses like every other button
+        /// in the game, with the circle a picture inside it -- the button's own face
+        /// is the prefab's to colour, and a mark set on it would be put back the
+        /// moment the pointer left. A button inside a button works out on its own:
+        /// uGUI hands a click to the innermost thing that handles it.
         /// </summary>
         private void BuildPin(HistoryRow row)
         {
@@ -1707,11 +1458,9 @@ namespace GitView
                 face = pin.GetComponentInChildren<Image>(true);
             }
 
-            // The prefab arrives with "NEW TEXT" written across it, which on a
-            // button this small lands on top of the number beside it. Emptied rather
-            // than destroyed, as on the row itself: other UIFactory behaviours write
-            // to that label, and one of them writing to a destroyed object is a
-            // worse bug than a blank one.
+            // The prefab arrives with "NEW TEXT" written across it, which on a button
+            // this small lands on the number beside it. Emptied rather than destroyed,
+            // as on the row itself.
             Text ownLabel = pin.GetComponentInChildren<Text>(true);
             if (ownLabel != null)
             {
@@ -1725,12 +1474,10 @@ namespace GitView
             rect.sizeDelta = new Vector2(PinSize, PinSize);
             rect.anchoredPosition = new Vector2(PinLeft, 0f);
 
-            // A round control on a round plate. The prefab's face is a rounded
-            // square, which is right for every other button in the game and wrong
-            // under a circle -- so it is switched off and a disc of ours takes its
-            // place. It is also what the button is clicked on: a Graphic that is not
-            // enabled does not take the pointer either, and the ring over it is left
-            // out of the raycast so that the whole plate is the target.
+            // A round control on a round plate: the prefab's face is a rounded square,
+            // so it is switched off and a disc of ours takes its place. That disc is
+            // also what the button is clicked on -- a disabled Graphic does not take
+            // the pointer -- and the ring over it is left out of the raycast.
             if (face != null)
             {
                 face.enabled = false;
@@ -1739,14 +1486,11 @@ namespace GitView
             plate.sprite = PinSprite(true, true);
             UIF.Stretch(plate.rectTransform, 0f, 0f);
 
-            // The circle is an image of ours inside the button rather than the
-            // button's own face recoloured, which was the first attempt at a mark
-            // like this and did nothing visible at all. UIFactory's graphics can
-            // carry a CustomMaterialHandler -- "forces the image to use a custom
-            // shader material instead of the default one" -- and a shader that does
-            // not multiply by the renderer's colour cannot be tinted. A plain uGUI
-            // Image on the default UI shader takes a colour.
-            row.PinFill = UIBuild.AddImage(rect, "Circle", QuietInk);
+            // An image of ours rather than the button's own face recoloured, which did
+            // nothing visible: UIFactory's graphics can carry a CustomMaterialHandler,
+            // and a shader that does not multiply by the renderer's colour cannot be
+            // tinted. A plain uGUI Image on the default UI shader takes a colour.
+            row.PinFill = UIBuild.AddImage(rect, "Circle", UIBuild.QuietInk);
             row.PinFill.sprite = PinSprite(false, false);
             UIF.Stretch(row.PinFill.rectTransform, 0f, 0f);
             row.PinFill.raycastTarget = false;
@@ -1757,13 +1501,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Makes the circle grow while the pointer is on it.
-        ///
-        /// Done by handing the button a bigger picture for its hovered state rather
-        /// than by scaling the control: UI Factory's buttons already swell a few per
-        /// cent, which on a twenty-two unit circle is half a unit and invisible. The
-        /// two pictures are the same circle drawn at two sizes inside the same box,
-        /// so nothing moves and nothing has to be put back.
+        /// Makes the circle grow while the pointer is on it, by handing the button a
+        /// bigger picture for its hovered state rather than scaling the control. The
+        /// two pictures are the same circle at two sizes inside the same box, so
+        /// nothing moves and nothing has to be put back.
         /// </summary>
         private static void SwellOnHover(Button button, Image face, bool filled)
         {
@@ -1784,18 +1525,18 @@ namespace GitView
         private static readonly Sprite[] _pinFaces = new Sprite[4];
 
         /// <summary>
-        /// The circle: empty or filled, at rest or under the pointer. Drawn at
-        /// several times the size it is shown at, since a twenty-two unit ring drawn
-        /// twenty-two pixels across is a square with its corners knocked off.
+        /// The circle: empty or filled, at rest or under the pointer. Drawn several
+        /// times the size it is shown at, since a 22-unit ring drawn 22 pixels across
+        /// is a square with its corners knocked off.
         /// </summary>
         private static Sprite PinSprite(bool filled, bool over)
         {
             int which = (filled ? 2 : 0) + (over ? 1 : 0);
             if (_pinFaces[which] == null)
             {
-                _pinFaces[which] = Drawn(IconArt.Disc(PinPixels,
-                                                      filled ? 0f : PinRing,
-                                                      over ? PinOver : PinRest));
+                _pinFaces[which] = UIBuild.Drawn(
+                    IconArt.Disc(PinPixels, filled ? 0f : PinRing,
+                                 over ? PinOver : PinRest));
             }
             return _pinFaces[which];
         }
@@ -1805,18 +1546,13 @@ namespace GitView
         /// <summary>
         /// The four bars that frame the row being shown.
         ///
-        /// A frame rather than a filled row. Filling it red is what Besiege does to
-        /// a chosen option on its own panels, and it works there because those are
-        /// short buttons with one word on them. A row here is a thumbnail, a
-        /// timestamp and three counts written in three colours of their own, and a
-        /// strong red behind all of that leaves the one row that matters most the
-        /// hardest one to read. An outline says the same thing and changes nothing
-        /// inside it.
+        /// A frame rather than the filled red Besiege puts on a chosen option: that
+        /// works on a short button with one word on it, and a row here is a thumbnail,
+        /// a timestamp and three counts in three colours of their own, which a strong
+        /// red behind everything would make the hardest row to read.
         ///
-        /// Inset from the row's edge rather than drawn along it, because a row is a
-        /// rounded rectangle: a frame flush with its edge would have square corners
-        /// standing outside the rounded ones. Three units in, against a corner
-        /// radius of about five, puts them back inside the shape.
+        /// Inset from the row's edge because a row is a rounded rectangle: three units
+        /// in, against a corner radius of about five.
         /// </summary>
         private static void BuildEdges(HistoryRow row)
         {
@@ -1852,17 +1588,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Pins a version as the one to compare against, or lets go of it.
-        ///
-        /// One or none, because it is one comparison: a diff has two sides, and the
-        /// far side is either a version the player chose or the one before in time.
-        /// Pinning a second version replaces the first rather than adding to it.
-        ///
-        /// Letting go goes back to nothing pinned, which is every row against the row
-        /// before it -- the reading of a history a minute at a time that the list is
-        /// for. Whichever version that leaves the comparison being measured from is
-        /// marked on its own circle, so "no pin" is still a visible state rather than
-        /// an absence of one.
+        /// Pins a version as the one to compare against, or lets go of it. One or
+        /// none, because a diff has two sides: pinning a second version replaces the
+        /// first. Letting go goes back to every row against the row under it, and
+        /// whichever version that leaves the comparison measured from is marked on its
+        /// own circle -- so "no pin" is a visible state rather than an absence of one.
         /// </summary>
         private void TogglePin(HistoryRow row)
         {
@@ -1872,9 +1602,8 @@ namespace GitView
             }
             _base = _base == row.Entry ? null : row.Entry;
             Restyle();
-            // The diff on screen was measured against something that is no longer
-            // what this is compared with, so it is worked out again -- without
-            // reloading the machine, which has not changed.
+            // The diff on screen was measured against something else, so it is worked
+            // out again -- without reloading the machine, which has not changed.
             if (_selected >= 0 && _selected < _versions.Count)
             {
                 ShowDiff(_versions[_selected]);
@@ -1885,24 +1614,16 @@ namespace GitView
         }
 
         /// <summary>
-        /// Marks a pin, or puts it back the way the prefab had it.
-        ///
-        /// Red because that is what Besiege marks a chosen thing with, and the same
-        /// red the chosen row is filled with -- one row is the version being looked
-        /// at, one pin is what it is being looked at against.
+        /// Marks a pin. Three states in two pictures: filled red for the version
+        /// somebody pinned, an empty red ring for the one the diff happens to be
+        /// measured from, and a quiet grey ring for everything else.
         /// </summary>
         private static void MarkPin(HistoryRow row, bool pinned, bool source)
         {
             if (row.PinFill != null)
             {
                 row.PinFill.sprite = PinSprite(pinned, false);
-                // Three states in two marks: filled red for the version somebody
-                // pinned, an empty red ring for the one the diff happens to be
-                // measured from -- usually the row above -- and a quiet grey ring for
-                // everything else. The red ring is what the arrow comes out of, and
-                // it used to be the same grey as every row that has nothing to do
-                // with the comparison.
-                row.PinFill.color = pinned || source ? SelectedFill : QuietInk;
+                row.PinFill.color = pinned || source ? SelectedFill : UIBuild.QuietInk;
                 // The hovered picture has to change with it, or a filled circle would
                 // turn back into a ring under the pointer.
                 SwellOnHover(row.Pin, row.PinFill, pinned);
@@ -1910,19 +1631,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// One column's label, spawned from UI Factory's Text prefab rather than
-        /// built out of a bare uGUI Text.
-        ///
-        /// The prefab brings Besiege's font and its letter spacing with it, which
-        /// is most of what makes a panel look like the game's rather than like a
-        /// mod's. Falls back to a plain label if UIFactory cannot supply one, so a
-        /// row is never simply missing.
-        /// </summary>
-        /// <summary>
-        /// A label pinned to the left of a row in pixels rather than across a
-        /// fraction of it. The number strip and the thumbnail beside it are fixed
-        /// sizes -- a two-digit number does not want more room on a wider window,
-        /// and a square thumbnail cannot have any.
+        /// A label placed in pixels rather than across a fraction of the row: a
+        /// two-digit number does not want more room on a wider window.
         /// </summary>
         private static Text Pixels(RectTransform row, string name, float from, float to,
                                    int fontSize, TextAnchor alignment)
@@ -1960,12 +1670,12 @@ namespace GitView
                         HeaderGap, HeaderGap);
         }
 
-        private static Text Cell(RectTransform row, string name, float from, float to,
-                                 TextAnchor alignment, int fontSize)
-        {
-            return Cell(row, name, from, to, alignment, fontSize, PadLeft, PadRight);
-        }
-
+        /// <summary>
+        /// One column of a row: a label from UI Factory's Text prefab, which brings
+        /// Besiege's font and its letter spacing with it, spanning the given share of
+        /// the row's width. Falls back to a plain label if UI Factory cannot supply
+        /// one, so a row is never simply missing.
+        /// </summary>
         private static Text Cell(RectTransform row, string name, float from, float to,
                                  TextAnchor alignment, int fontSize, float left,
                                  float right)
@@ -2001,16 +1711,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Colours a row for what it is and whether it is the one being shown.
-        ///
-        /// Only the frame around it says which row is chosen. The text is the same
-        /// on every row -- the counts in their own colours, the timestamp quiet --
-        /// so that a column means one thing all the way down and the chosen row is
-        /// not also the one row whose numbers are written differently from the rest.
-        ///
-        /// A manual save is marked by the word SAVED above its timestamp and by
-        /// nothing else. It used to be written in white as well, which made it look
-        /// selected.
+        /// Colours a row for what it is and whether it is the one being shown. Only
+        /// the frame says which row is chosen: the text is the same on every row, so
+        /// a column means one thing all the way down.
         /// </summary>
         private void Repaint(HistoryRow row, VersionEntry entry, bool chosen,
                              bool pinned)
@@ -2021,30 +1724,21 @@ namespace GitView
             if (row.Number != null)
             {
                 row.Number.text = entry.Number > 0 ? entry.Number.ToString() : string.Empty;
-                // Written white beside a filled circle and grey beside an empty one.
-                // The circle is the mark and this is not a second one: it is the same
-                // number in the same place, brought up to the weight of the thing
-                // next to it.
-                row.Number.color = pinned ? Color.white : QuietInk;
+                // White beside a filled circle and grey beside an empty one: the same
+                // number in the same place, at the weight of the thing next to it.
+                row.Number.color = pinned ? Color.white : UIBuild.QuietInk;
             }
             row.Stamp.text = entry.Lines();
-            row.Stamp.color = QuietInk;
+            row.Stamp.color = UIBuild.QuietInk;
             BindCounts(row, entry);
         }
 
         /// <summary>
         /// Frames the row that is the version on screen, dashes the same frame round
-        /// the one it is being compared with, and unframes the rest.
-        ///
-        /// The same frame in the same red for both, because they are the two ends of
-        /// one comparison and the arrow between them says so. Solid for the one you
-        /// chose and dashed for the one that follows from it -- which is the usual
-        /// way of drawing a thing you set against a thing that was worked out.
-        ///
-        /// The hover veil is not touched here: it is the button's own colour
-        /// transition, wired once when the row was built, so being under the
-        /// pointer and being the chosen row are two marks that cannot get in each
-        /// other's way.
+        /// the one it is compared with, and unframes the rest. The same red for both,
+        /// they being two ends of one comparison: solid for the one you chose, dashed
+        /// for the one that follows from it. The hover veil is the button's own colour
+        /// transition and is not touched here.
         /// </summary>
         private static void Tint(HistoryRow row, bool chosen, bool source)
         {
@@ -2073,14 +1767,13 @@ namespace GitView
 
         /// <summary>
         /// The dashes, drawn once each way, at the size the pattern was drawn at
-        /// however long the bar carrying it turns out to be.
+        /// however long the bar carrying it is.
         ///
-        /// A hundred pixels to the unit, which is Unity's default and looks like the
-        /// wrong number here. A tiled Image does not tile at the sprite's own size:
-        /// it tiles at <c>sprite.pixelsPerUnit / canvas.referencePixelsPerUnit</c>,
-        /// and a canvas's reference is 100. Created at one pixel per unit -- which
-        /// reads as "draw it actual size" and is what this was -- every dash came out
-        /// a hundred times too long, which is to say the frame was a solid line.
+        /// A hundred pixels to the unit, which looks like the wrong number and is not:
+        /// a tiled Image tiles at
+        /// <c>sprite.pixelsPerUnit / canvas.referencePixelsPerUnit</c>, and a canvas's
+        /// reference is 100. Created at 1 -- which reads as "actual size" -- every
+        /// dash comes out a hundred times too long, and the frame is a solid line.
         /// </summary>
         private static Sprite DashSprite(bool down)
         {
@@ -2127,22 +1820,19 @@ namespace GitView
 
         private void BindCounts(HistoryRow row, VersionEntry entry)
         {
-            // How big the machine is, which is a fact about the version rather than
-            // about any comparison -- so it is filled in the same way whatever the
-            // rest of the row says, including on the row that has nothing to be
-            // compared against.
+            // How big the machine is: a fact about the version rather than about any
+            // comparison, so it is filled in even on the row with nothing to compare
+            // against.
             if (row.Blocks != null)
             {
                 row.Blocks.text = entry.Counted ? entry.BlockCount.ToString() : "·";
                 row.Blocks.color = entry.Counted
-                    ? DiffPalette.Ink(DiffPalette.Unchanged) : QuietInk;
+                    ? DiffPalette.Ink(DiffPalette.Unchanged) : UIBuild.QuietInk;
             }
 
-            // The oldest version is only a special case while the counts are what
-            // each save did: there is no save before it to be a change from. Against
-            // a pinned source it is a comparison like any other, and so is the pinned
-            // version itself -- which comes out as three dashes, being no different
-            // from itself.
+            // The oldest version is a special case only while the counts are what
+            // each save did, there being no save before it. Against a pinned source it
+            // is a comparison like any other.
             if (_base == null && RowSort.Earlier(_versions, entry) == null)
             {
                 // Nothing before it to be a change from, so nothing is written --
@@ -2157,15 +1847,14 @@ namespace GitView
                 row.Added.text = "·";
                 row.Changed.text = "·";
                 row.Removed.text = "·";
-                row.Added.color = QuietInk;
-                row.Changed.color = QuietInk;
-                row.Removed.color = QuietInk;
+                row.Added.color = UIBuild.QuietInk;
+                row.Changed.color = UIBuild.QuietInk;
+                row.Removed.color = UIBuild.QuietInk;
                 return;
             }
 
-            // A zero is written as a dash in the quiet ink rather than in the
-            // column's own colour, so "nothing removed" cannot be misread at a
-            // glance as a count with a minus sign in front of it.
+            // A zero is a dash in the quiet ink rather than the column's own colour,
+            // so "nothing removed" cannot be misread as a count with a minus sign.
             Fill(row.Added, entry.Added, "+", DiffPalette.Added);
             Fill(row.Changed, entry.Changed, "~", DiffPalette.Changed);
             Fill(row.Removed, entry.Removed, "-", DiffPalette.Removed);
@@ -2174,17 +1863,13 @@ namespace GitView
         private static void Fill(Text cell, int count, string sign, int category)
         {
             cell.text = count == 0 ? "–" : sign + count;
-            cell.color = count == 0 ? QuietInk : DiffPalette.Ink(category);
+            cell.color = count == 0 ? UIBuild.QuietInk : DiffPalette.Ink(category);
         }
 
         /// <summary>
-        /// Marks every heading with both arrows, the one that is in force lit and
-        /// the other dimmed.
-        ///
-        /// Showing a single arrow on the sorted column only says which column is
-        /// sorted; it does not say what clicking the others would do, or that
-        /// clicking this one again would reverse it. A pair on every column says
-        /// all three at once.
+        /// Marks every heading with both arrows, the one in force lit and the other
+        /// dimmed. One arrow on the sorted column says which column is sorted; a pair
+        /// on every column also says what clicking the others would do.
         /// </summary>
         private void UpdateHeaderMarks()
         {
@@ -2198,14 +1883,13 @@ namespace GitView
                 _headers[column].text = RowSort.ColumnName(column, _chosen) + "  " +
                                         Arrow("▲", sorted && _ascending) +
                                         Arrow("▼", sorted && !_ascending);
-                _headers[column].color = sorted ? Color.white : QuietInk;
+                _headers[column].color = sorted ? Color.white : UIBuild.QuietInk;
             }
         }
 
         /// <summary>
-        /// One arrow, lit or dimmed. The colour has to be markup rather than the
-        /// label's own: both arrows live in the same label as the heading, and only
-        /// one of them is ever in force.
+        /// One arrow, lit or dimmed. Markup rather than the label's own colour: both
+        /// arrows live in the same label as the heading.
         /// </summary>
         private static string Arrow(string glyph, bool lit)
         {
@@ -2234,11 +1918,9 @@ namespace GitView
             RebuildRows();
             if (chosen != null && _base == null)
             {
-                // Nothing is re-counted -- what a row counts as added, changed and
-                // removed is what that save did, whatever order the list is in -- but
-                // the machine on screen is compared with the row under it, and that
-                // is a different row now. So the colours over the machine, the arrow
-                // and the status line are worked out again.
+                // Nothing is re-counted -- a row's counts are what that save did,
+                // whatever order the list is in -- but the machine on screen is
+                // compared with the row under it, and that is a different row now.
                 ShowDiff(chosen);
             }
             _content.anchoredPosition = new Vector2(_content.anchoredPosition.x, 0f);
@@ -2267,12 +1949,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Loads the chosen version and draws what it changed.
-        ///
-        /// The overlay has to wait for the load: <c>LoadMachineInfo</c> destroys and
-        /// rebuilds every block, and the ghosts hang off the transform those blocks
-        /// live under, so drawing them first would leave them parented to something
-        /// about to be thrown away.
+        /// Loads the chosen version and draws what it changed. The overlay has to wait
+        /// for the load: <c>LoadMachineInfo</c> destroys and rebuilds every block, and
+        /// the shells hang off the transform those blocks live under.
         /// </summary>
         private IEnumerator LoadAndShow(VersionEntry entry)
         {
@@ -2299,12 +1978,9 @@ namespace GitView
 
         /// <summary>
         /// Works out what one version changed and draws it, without touching the
-        /// machine in the build area.
-        ///
-        /// Separate from loading because the two sides of a diff can change without
-        /// the machine changing: pinning a version re-answers the question about the
-        /// version already on screen, and reloading it to say so would throw the
-        /// build area away and put it back identical.
+        /// machine. Separate from loading because the two sides of a diff can change
+        /// without the machine changing: pinning re-answers the question about the
+        /// version already on screen.
         /// </summary>
         private void ShowDiff(VersionEntry entry)
         {
@@ -2324,11 +2000,9 @@ namespace GitView
                 return;
             }
 
-            // Nothing here cares that these two versions are next to each other or
-            // even which way round they are in time: it is two machines, and every
-            // block in the newer one that the older one does not have is an
-            // addition. A pinned base is that same comparison with one side held
-            // still.
+            // Nothing here cares that the two versions are next to each other, or
+            // which way round they are in time: it is two machines, and a pinned base
+            // is the same comparison with one side held still.
             DiffResult diff = BlockDiff.Compare(before, after);
             _ghosts.Show(diff);
             Say(Describe(diff) + "   vs " + against.Title() +
@@ -2337,12 +2011,14 @@ namespace GitView
 
         /// <summary>
         /// What a version is compared against: whatever the player pinned, or the row
-        /// underneath it. A version pinned and then clicked is compared with itself,
-        /// which is a real answer -- no change -- and needs no special case.
+        /// underneath it in the order the list is being shown in -- see
+        /// <see cref="RowSort.Below"/>. A version pinned and then clicked is compared
+        /// with itself, which is a real answer -- no change -- and needs no special
+        /// case; the bottom row has nothing under it and comes back null.
         /// </summary>
         private VersionEntry Baseline(VersionEntry entry)
         {
-            return _base != null ? _base : Predecessor(entry);
+            return _base != null ? _base : RowSort.Below(_versions, entry);
         }
 
         private static string Describe(DiffResult diff)
@@ -2355,26 +2031,12 @@ namespace GitView
                    " changed    -" + diff.Removed.Count + " removed";
         }
 
-        /// <summary>
-        /// The row under this one, which with nothing pinned is what it is compared
-        /// against -- see <see cref="RowSort.Below"/>. Null for the bottom row, which
-        /// has nothing under it to be a change from.
-        /// </summary>
-        private VersionEntry Predecessor(VersionEntry entry)
-        {
-            return RowSort.Below(_versions, entry);
-        }
-
         // ----------------------------------------------------------------- counting
 
         /// <summary>
-        /// Fills in every row's counts, oldest first.
-        ///
-        /// Spread over frames on purpose. A folder can hold a hundred versions of a
-        /// five-hundred-block machine, and reading and diffing all of them in one
-        /// go is a visible freeze; done this way the window is usable immediately
-        /// and the numbers arrive behind it. Only two snapshots are ever held at
-        /// once, so the memory does not grow with the length of the history.
+        /// Fills in every row's counts, oldest first, a file a frame: a folder can
+        /// hold a hundred versions of a five-hundred-block machine, and doing them all
+        /// at once is a visible freeze. Only two snapshots are held at a time.
         /// </summary>
         private IEnumerator CountEverything()
         {
@@ -2382,19 +2044,15 @@ namespace GitView
             int pass = ++_countPass;
 
             // Oldest first, by number, which is the machine's own order and not the
-            // one the list happens to be showing. What a row counts as added,
-            // changed and removed is what that save did -- a fact about the version,
-            // fixed once it has been read -- because a column of numbers that
-            // changed every time the list was re-arranged could not be sorted by:
-            // clicking ADDED would order the rows by figures that stopped being true
-            // the moment the click landed.
+            // one the list is showing: a row's counts are what that save did, fixed
+            // once read, because a column that changed with the arrangement could not
+            // be sorted by.
             List<VersionEntry> ordered = new List<VersionEntry>(_versions);
             RowSort.Apply(ordered, RowSort.ByNumber, true);
 
             // Held for the whole pass when a version is pinned: every row is then a
-            // comparison with the same machine, so it is read once instead of once
-            // per row. Null when nothing is pinned, and then `previous` walks the
-            // list a row at a time.
+            // comparison with the same machine, read once instead of once per row.
+            // Null when nothing is pinned, and `previous` walks the list instead.
             VersionEntry source = _base;
             MachineSnapshot fixedBase = source == null ? null : VersionScan.Read(source.Path);
             MachineSnapshot previous = null;
@@ -2404,9 +2062,9 @@ namespace GitView
                 VersionEntry entry = ordered[i];
                 Say("Reading history... " + (i + 1) + " of " + ordered.Count);
                 yield return null;
-                // Checked after the wait rather than before it: a pin changed while
-                // this was asleep makes every count it is about to write wrong, and
-                // a newer pass is already on its way to writing the right ones.
+                // Checked after the wait: a pin changed while this was asleep makes
+                // every count it is about to write wrong, and a newer pass is already
+                // writing the right ones.
                 if (pass != _countPass)
                 {
                     yield break;
@@ -2442,9 +2100,7 @@ namespace GitView
 
             _counting = false;
             // A list sorted by a column of counts was sorted by figures that had not
-            // been read yet -- every row was a dot when the heading was clicked, or
-            // half of them were. Now that they are all in, the order that was asked
-            // for is applied to them.
+            // been read yet. Now they are all in, the order asked for is applied.
             if (RowSort.IsCount(_sortColumn))
             {
                 VersionEntry chosen = _selected >= 0 && _selected < _versions.Count
@@ -2458,10 +2114,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Counts the whole list again, because what the counts are measured from
-        /// has changed. Rows go back to showing nothing until their new numbers
-        /// arrive, which is honest -- the old ones were answers to a different
-        /// question -- and takes about a second for a hundred versions.
+        /// Counts the whole list again, because what the counts are measured from has
+        /// changed. Rows go back to a dot until their new numbers arrive, the old ones
+        /// being answers to a different question.
         /// </summary>
         private void Recount()
         {
@@ -2487,12 +2142,9 @@ namespace GitView
         // --------------------------------------------------------------- thumbnails
 
         /// <summary>
-        /// Loads the thumbnails of the rows on screen and drops the rest.
-        ///
-        /// Besiege writes a 512x512 PNG per autosave, which is a megabyte once it
-        /// is a texture, so a hundred-version folder is a hundred megabytes if they
-        /// are all held at once. Only what is visible -- a dozen at the very most --
-        /// is ever loaded.
+        /// Loads the thumbnails of the rows on screen and drops the rest. Besiege
+        /// writes a 512x512 PNG per autosave, a megabyte once it is a texture, so a
+        /// hundred-version folder would be a hundred megabytes held at once.
         /// </summary>
         private void RefreshThumbnails()
         {
@@ -2544,8 +2196,7 @@ namespace GitView
             row.ThumbnailLoaded = false;
             if (texture != null)
             {
-                // Loaded by us, from a file, one fresh texture per call -- so this
-                // is ours to destroy and nothing else is holding it.
+                // One fresh texture per call, loaded by us: ours to destroy.
                 Destroy(texture);
             }
         }

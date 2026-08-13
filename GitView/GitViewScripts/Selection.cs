@@ -18,16 +18,13 @@ namespace GitView
     }
 
     /// <summary>
-    /// The machines picked out of the load screen for a diff, in the order they
-    /// were picked.
+    /// The machines picked out of the load screen for a diff, in the order they were
+    /// picked -- which is what the numbers on the marks say.
     ///
-    /// Static, and deliberately outliving the browser: the load screen destroys and
-    /// rebuilds its slots when the page turns or the folder changes, so anything
-    /// kept on a slot is gone the moment the player goes looking for the second
-    /// machine to compare. A machine is identified by its path for the same reason.
-    ///
-    /// The order is the choosing order, not the order on screen or in time. It is
-    /// what the numbers on the marks say, and the player put them in it.
+    /// Static, and deliberately outliving the browser: the load screen rebuilds its
+    /// slots when the page turns, so anything kept on a slot is gone the moment the
+    /// player goes looking for the second machine. A machine is identified by its
+    /// path for the same reason.
     /// </summary>
     public static class Selection
     {
@@ -52,12 +49,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Picks a machine, or unpicks it if it was already picked. Returns true if
-        /// it is now chosen.
-        ///
-        /// Unpicking renumbers everything after it, which is the point of the list
-        /// being ordered: the marks always read 1, 2, 3 with nothing missing out of
-        /// the middle.
+        /// Picks a machine, or unpicks it if it was already picked. Unpicking
+        /// renumbers everything after it, so the marks always read 1, 2, 3 with
+        /// nothing missing out of the middle.
         /// </summary>
         public static bool Toggle(IVirtualObject item)
         {
@@ -97,9 +91,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Forgets everything chosen. Putting the dimmed pictures back is the
-        /// browser's business -- see <c>BrowserWatch.Reconcile</c>, which notices at
-        /// its next sweep that these are no longer chosen.
+        /// Forgets everything chosen. Putting the dimmed pictures back is
+        /// <c>BrowserWatch.Reconcile</c>'s business, at its next sweep.
         /// </summary>
         public static void Clear()
         {
@@ -123,13 +116,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// The chosen machines as the history window's rows.
-        ///
-        /// The window was written for the versions of one machine and needs no
-        /// telling that these are not: a row is a file, a time and a picture either
-        /// way. The two things that differ are said here -- the number is the order
-        /// they were chosen in rather than a place in a history, and the name is the
-        /// machine's own, since none of them is an "autosave" of anything.
+        /// The chosen machines as the history window's rows. A row is a file, a time
+        /// and a picture either way; the two things that differ are said here -- the
+        /// number is the order they were chosen in, and the name is the machine's own
+        /// rather than an "autosave" of anything.
         /// </summary>
         public static List<VersionEntry> AsRows()
         {
@@ -146,10 +136,6 @@ namespace GitView
                 rows.Add(entry);
             }
 
-            // Numbered in the order they were chosen, which is what the marks in
-            // the load screen said and the only thing tying a row here to a machine
-            // the player picked out there. A version's number is its place in a
-            // history; a chosen machine's is the place the player gave it.
             return rows;
         }
     }

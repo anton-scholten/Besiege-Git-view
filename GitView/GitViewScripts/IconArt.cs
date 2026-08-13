@@ -3,37 +3,26 @@ using UnityEngine;
 namespace GitView
 {
     /// <summary>
-    /// Draws the compare button's face into a texture at runtime.
+    /// Every picture this mod draws for itself: the branch on its buttons, the marks
+    /// in a title bar, the colour strip, the arrowhead and the pin circle.
     ///
-    /// Generated rather than shipped as a PNG: it cannot go missing from an
-    /// install, it costs nothing at this size, and it sidesteps the case-sensitive
-    /// resource loading that catches Workshop mods authored on Windows. UI
-    /// Factory's sprite set is Besiege's own HUD sprites, so there is no
-    /// ready-made icon to borrow for this.
-    ///
-    /// The glyph is the usual branch mark: a trunk between two commits, and a
-    /// branch leaving it for a third. It is what the button does, and it is
-    /// recognisable at the size Besiege draws a slot button.
+    /// Generated rather than shipped as PNGs -- they cannot go missing from an
+    /// install, they cost nothing at this size, and it sidesteps the case-sensitive
+    /// resource loading that catches Workshop mods authored on Windows. UI Factory's
+    /// sprite set is Besiege's HUD sprites, with nothing to borrow for these.
     /// </summary>
     public static class IconArt
     {
         private const int Samples = 4;
 
-        // Which shape to draw. Ints rather than an enum, because Besiege's in-game
-        // compiler segfaults on an enum declaration. There is only the one shape
-        // now -- the mod says "history" with a branch everywhere it says anything,
-        // on the machines, on the versions and on the button that compares them --
-        // but the corner mark is what tells them apart, and that is drawn by the
-        // same routine.
-        public const int GlyphBranch = 0;
-
         /// <summary>
-        /// The branch glyph, white on transparent, so that whatever tint it is
-        /// drawn with is what colours it.
+        /// The branch glyph, white on transparent, so whatever tint it is drawn with
+        /// is what colours it. The mod says "history" with a branch everywhere it
+        /// says anything; the mark in the corner is what tells the buttons apart.
         /// </summary>
         public static Texture2D Branch(int size)
         {
-            return Render(size, GlyphBranch, string.Empty, null);
+            return Render(size, string.Empty, null);
         }
 
         // The two line-art marks on the window's title bar. Both are drawn to the
@@ -176,14 +165,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// A row of colours, side by side: the strip a colour slider runs along.
-        ///
-        /// Besiege's own colour slider is a knob dragged along a picture of the
-        /// colours it can choose -- <c>ColourSliderSelector</c> holds one as a
-        /// <c>Texture</c> and works out which pixel of it a colour is. That texture
-        /// belongs to the block mapper and cannot be borrowed, so this draws the
-        /// same thing: one band per colour, hard-edged, so that what the knob is
-        /// pointing at is unambiguous.
+        /// The strip a colour slider runs along. Besiege's own is a knob dragged
+        /// along a picture of the colours -- <c>ColourSliderSelector</c> holds one as
+        /// a <c>Texture</c> -- which belongs to the block mapper and cannot be
+        /// borrowed, so this draws the same thing.
         /// </summary>
         public static Texture2D Strip(int width, int height)
         {
@@ -212,22 +197,16 @@ namespace GitView
         }
 
         /// <summary>
-        /// How washed out the strip is drawn.
-        ///
-        /// Besiege's own colour slider is a pale ramp -- sampled off the rocket's
-        /// explosion colour, its saturation runs about 0.62 across the whole bar --
-        /// while the colour it hands back is the full-strength one: the rocket's
-        /// knob sits at the left of a pink-red band and the value beside it reads
-        /// #FF4C00. So the picture is pastel and the answer is not, and this is the
-        /// picture.
+        /// How washed out the strip is drawn. Besiege's own is a pale ramp -- about
+        /// 0.62 saturation, sampled off the rocket's explosion colour -- while the
+        /// colour it hands back is full strength. This is the picture, not the answer.
         /// </summary>
         private const float StripSaturation = 0.62f;
 
         /// <summary>
         /// One hue, at the saturation asked for and full brightness. Worked out here
-        /// rather than through <c>Color.HSVToRGB</c>: this mod is compiled by the
-        /// game's own compiler against the game's own Unity, and six lines of
-        /// arithmetic cannot be missing from it.
+        /// rather than through <c>Color.HSVToRGB</c>, which the game's own Unity may
+        /// not have; six lines of arithmetic cannot be missing.
         /// </summary>
         public static Color Hue(float hue, float saturation)
         {
@@ -284,12 +263,9 @@ namespace GitView
         private const int DashGap = 5;
 
         /// <summary>
-        /// The dashes the frame round the source row is drawn with, running along
-        /// the bar or down it.
-        ///
-        /// Two textures rather than one rotated: a tiled Image repeats along its own
-        /// width, so the dashes in a vertical bar have to be drawn down a vertical
-        /// texture.
+        /// The dashes the frame round the source row is drawn with. Two textures
+        /// rather than one rotated: a tiled Image repeats along its own width, so a
+        /// vertical bar needs its dashes drawn down a vertical texture.
         /// </summary>
         public static Texture2D Dashes(bool down, int thickness)
         {
@@ -317,17 +293,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// A circle: the button beside a version's number that pins it as the one
-        /// everything is compared against. Empty when it is not pinned, filled when
-        /// it is.
+        /// The circle beside a version's number: a ring when it is not pinned, a disc
+        /// when it is. One routine for both -- a thickness for the ring, nothing for
+        /// the disc -- so the two are guaranteed to be the same circle.
         ///
-        /// A ring and a disc are the same drawing with and without a middle, so one
-        /// routine draws both -- a thickness for the ring, nothing for the disc --
-        /// and the two are then guaranteed to be the same circle.
-        ///
-        /// <paramref name="spread"/> is how much of the picture the circle takes up,
-        /// which is how it grows under the pointer: the rect stays the size it is and
-        /// the drawing inside it gets bigger, so nothing has to be scaled or moved.
+        /// <paramref name="spread"/> is how much of the picture the circle fills,
+        /// which is how it grows under the pointer: the rect holds still and the
+        /// drawing inside it gets bigger, so nothing is scaled or moved.
         /// </summary>
         public static Texture2D Disc(int size, float thickness, float spread)
         {
@@ -410,24 +382,22 @@ namespace GitView
         }
 
         /// <summary>
-        /// The branch with a plus in its corner: the button that adds this machine
-        /// to a comparison. The same glyph as the history button next to it,
-        /// because it is the same mod and the same idea -- with the one mark that
+        /// The branch with a plus in its corner: the button that adds this machine to
+        /// a comparison. The same glyph as the history button, with the one mark that
         /// says this one adds something.
         /// </summary>
         public static Texture2D Plus(int size, Font font)
         {
-            return Render(size, GlyphBranch, "+", font);
+            return Render(size, "+", font);
         }
 
         /// <summary>
-        /// The branch with a number in its bottom-right corner: what the plus
-        /// becomes once a machine has been added, saying where it comes in the
-        /// order.
+        /// The branch with a number in its corner: what the plus becomes once a
+        /// machine has been added, saying where it comes in the order.
         /// </summary>
         public static Texture2D Numbered(int size, int number, Font font)
         {
-            return Render(size, GlyphBranch, number.ToString(), font);
+            return Render(size, number.ToString(), font);
         }
 
         /// <summary>
@@ -437,9 +407,8 @@ namespace GitView
         private static readonly Color32 PlateInk = new Color32(2, 7, 13, 255);
 
         /// <summary>
-        /// Barely rounded. Besiege's own button plates are square-cornered -- read
-        /// off a screenshot, a pixel at a time -- and this was visibly the odd one
-        /// out in the row at a fifth of its width.
+        /// Barely rounded: Besiege's own button plates are square-cornered, read off
+        /// a screenshot a pixel at a time.
         /// </summary>
         private const float PlateRadius = 0.04f;
 
@@ -455,14 +424,10 @@ namespace GitView
 
         /// <summary>
         /// The branch on a plate, for the row of buttons at the top of the load
-        /// screen.
-        ///
-        /// The plate has to be drawn rather than left to the button, because a load
-        /// button's picture and the dark square under it are one texture on one
-        /// quad: replacing the picture takes the square with it, and the button
-        /// comes out as the one bare glyph in a row of plated ones. Everything
-        /// through the icon is drawn opaque, so what is behind the plate cannot show
-        /// through the corners either.
+        /// screen -- used only where no real plate could be copied. A load button's
+        /// picture and the dark square under it are one texture on one quad, so
+        /// replacing the picture takes the square with it and leaves the one bare
+        /// glyph in a row of plated ones. Drawn opaque throughout.
         /// </summary>
         public static Texture2D Plated(int size)
         {
@@ -547,18 +512,11 @@ namespace GitView
         private const int TipPoints = 48;
 
         /// <summary>
-        /// A line of words on a plate, as a picture: what the compare-them-all
-        /// button says while the pointer is on it.
-        ///
-        /// Drawn rather than written into a <c>TextMesh</c> for the reason the whole
-        /// of this file exists -- a texture on a quad of our own is the one way of
-        /// putting something on the load screen that has been seen to work. The
-        /// tooltip Besiege would have lent us belongs to the button we copied and
-        /// cannot be pointed anywhere else; a TextMesh copied off the screen brings
-        /// a material, a property block and a scale that are all somebody else's.
-        ///
-        /// Null if the font cannot draw it, and the button then has no tooltip,
-        /// which is a good deal better than a blank plate.
+        /// A line of words on a plate, as a picture: the fallback tooltip for the
+        /// compare-them-all button, used where Besiege's own could not be copied.
+        /// A texture on a quad of ours is the one way of putting something on the
+        /// load screen that has been seen to work. Null if the font cannot draw it,
+        /// and the button then has no tooltip rather than a blank plate.
         /// </summary>
         public static Texture2D Words(string text, Font font)
         {
@@ -626,7 +584,7 @@ namespace GitView
             return texture;
         }
 
-        private static Texture2D Render(int size, int glyph, string corner, Font font)
+        private static Texture2D Render(int size, string corner, Font font)
         {
             Texture2D texture = new Texture2D(size, size, TextureFormat.ARGB32, false);
             texture.wrapMode = TextureWrapMode.Clamp;
@@ -646,7 +604,7 @@ namespace GitView
                         {
                             float u = (x * Samples + sx + 0.5f) * step;
                             float v = (y * Samples + sy + 0.5f) * step;
-                            if (Inside(u, v, glyph))
+                            if (InsideBranch(u, v))
                             {
                                 hits++;
                             }
@@ -674,27 +632,20 @@ namespace GitView
         //               |       /
         //               |      |                  the branch, a quarter turn
         //               |     /
-        //               |----'                    leaving the trunk at 0.44
+        //               |----'
         //               |
         //   (0.30,0.14) o                         where the trunk starts
         //
-        // The arc's centre is the *top of the trunk*, not the fork: a quarter
-        // circle from there leaves the trunk horizontally and arrives at the far
-        // commit vertically, so both joins are tangent and neither shows. Centring
-        // it on the fork instead — the first thing I tried — leaves the branch
-        // climbing almost parallel to the trunk for half its length, and the two
-        // read as one thick smudge.
+        // The arc's centre is the *top of the trunk*, not the fork: from there a
+        // quarter circle leaves the trunk horizontally and arrives at the far commit
+        // vertically, so both joins are tangent. Centred on the fork, the branch
+        // climbs almost parallel to the trunk and the two read as one smudge.
         private const float TrunkX = 0.30f;
         private const float BranchX = 0.72f;
         private const float BottomY = 0.14f;
         private const float TopY = 0.86f;
         private const float NodeRadius = 0.125f;
         private const float Stroke = 0.075f;
-
-        private static bool Inside(float u, float v, int glyph)
-        {
-            return InsideBranch(u, v);
-        }
 
         private static bool InsideBranch(float u, float v)
         {
@@ -717,11 +668,6 @@ namespace GitView
 
         // ------------------------------------------------------------- the number
 
-        /// <summary>
-        /// The digits, three across and five down, a row per nibble from the top.
-        /// A font of five hundred glyphs is not worth loading, rendering and
-        /// keeping alive to write "2" in the corner of an icon.
-        /// </summary>
         /// <summary>The plus, in the same three-by-five grid as the digits.</summary>
         private const int PlusBits = 0x05D0; // 000 010 111 010 000
 
@@ -757,12 +703,10 @@ namespace GitView
         private const float NumberGap = 0.05f;
 
         /// <summary>
-        /// Writes a number into the corner of an icon that has already been drawn.
-        ///
-        /// It overwrites rather than draws over: every pixel of the number's own box
-        /// is set, to the digit or to nothing at all. A number in the same white as
-        /// the glyph, laid on top of the glyph, is not a number anybody can read --
-        /// and clearing the box first is what makes the corner its own space.
+        /// Writes a number into the corner of an icon already drawn. It overwrites
+        /// rather than draws over -- every pixel of the number's box is set, to the
+        /// digit or to nothing -- because a white number on a white glyph is not a
+        /// number anybody can read.
         /// </summary>
         private static void Stamp(Color32[] pixels, int size, string text)
         {
@@ -825,21 +769,15 @@ namespace GitView
         //                                                          game's own font
 
         /// <summary>
-        /// Writes the corner mark in Besiege's UI font -- the font the history
-        /// window is written in -- by copying the glyphs straight out of the font's
-        /// atlas.
+        /// Writes the corner mark in Besiege's own UI font, by copying the glyphs
+        /// out of the font's atlas. The three-by-five bitmap is the fallback, and
+        /// looked pixelled beside everything else on the screen. A <c>TextMesh</c>
+        /// would be a second object to place, scale, hide and destroy in step with
+        /// the first; copied into the picture, the number is part of the picture.
         ///
-        /// The three-by-five bitmap below it is still there and is still what draws
-        /// this if anything goes wrong, but a number beside a machine's picture is
-        /// read as text and looked pixelled next to everything else on the screen.
-        /// A <c>TextMesh</c> parented to the mark would have been the obvious way
-        /// and is worse: it is a second object to place, scale, hide and destroy in
-        /// step with the first, and its size in world units cannot be known without
-        /// rendering it. Copied into the picture, the number is part of the picture.
-        ///
-        /// Returns false if the font cannot supply what is needed -- no font, no
-        /// atlas, a character it does not have, or a glyph packed sideways -- and
-        /// the caller then draws the bitmap.
+        /// False if the font cannot supply what is needed -- no font, no atlas, a
+        /// character it does not have, a glyph packed sideways -- and the caller
+        /// then draws the bitmap.
         /// </summary>
         private static bool StampFont(Color32[] pixels, int size, string text, Font font)
         {
@@ -920,9 +858,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// The box the ink of a laid-out line actually fills -- not the line box.
-        /// Line boxes carry the font's leading, so a "1" fitted by its line box comes
-        /// out visibly smaller than a "4" fitted the same way.
+        /// The box the ink of a laid-out line actually fills, not the line box: line
+        /// boxes carry the font's leading, so a "1" fitted by one comes out visibly
+        /// smaller than a "4".
         /// </summary>
         private static void Extent(CharacterInfo[] glyphs, float[] pen, out float left,
                                    out float right, out float bottom, out float top)
@@ -1013,9 +951,8 @@ namespace GitView
                     {
                         continue;
                     }
-                    // Laid over whatever is there rather than written on top of it:
-                    // on an icon that is nothing, and on a tooltip it is the plate,
-                    // which the letters have to be readable against.
+                    // Laid over whatever is there: nothing on an icon, and on a
+                    // tooltip the plate the letters have to be readable against.
                     Color32 was = pixels[y * width + x];
                     float share = covered / 255f;
                     pixels[y * width + x] = new Color32(
@@ -1028,11 +965,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// A readable copy of a font's atlas.
-        ///
-        /// Through a RenderTexture for the same reason as <see cref="Dim"/>: the
-        /// atlas belongs to the font, is very often not readable, and asking is not
-        /// something that can be got right from out here.
+        /// A readable copy of a font's atlas, taken through a RenderTexture: the
+        /// atlas belongs to the font and is very often not readable.
         /// </summary>
         private class Atlas
         {
@@ -1123,17 +1057,11 @@ namespace GitView
 
         /// <summary>
         /// A machine's thumbnail as it looks once the machine has been chosen:
-        /// darker, and blurred by being small.
-        ///
-        /// The blur is the cheapest one there is and the only one available -- a
-        /// blur shader is not something a mod can count on being in the player's
-        /// build. Drawing the picture into a very small texture averages it down,
-        /// and the bilinear filter stretching it back over the slot is what turns
-        /// that into a blur rather than a mosaic.
-        ///
-        /// Through a RenderTexture rather than <c>GetPixels</c> because the source
-        /// belongs to the game and may well have been loaded unreadable, which
-        /// nothing out here can ask about without being wrong sooner or later.
+        /// darker, and blurred by being small. The cheapest blur there is and the
+        /// only one available -- a blur shader is not something a mod can count on --
+        /// with the bilinear filter stretching it back over the slot turning it into
+        /// a blur rather than a mosaic. Through a RenderTexture because the source
+        /// belongs to the game and may well be unreadable.
         /// </summary>
         public static Texture2D Dim(Texture source, int size, float darken)
         {

@@ -1,26 +1,19 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 
 namespace GitView
 {
     /// <summary>
-    /// Puts a compare button on the machines in the load screen that have a saved
-    /// history, and opens the history window when it is pressed.
+    /// Puts this mod's buttons on the load screen and opens the history window when
+    /// one is pressed.
     ///
-    /// The load screen is not uGUI. Its slots are mesh objects in world space with
-    /// <c>SimpleUIButton</c> colliders on them, so there is no prefab of Besiege's
-    /// to instantiate and no layout group to add a child to. The button is
-    /// therefore a copy of one of the slot's own buttons, which brings the right
-    /// mesh, material, collider and press behaviour with it, wearing a face drawn
-    /// by <see cref="IconArt"/>.
-    ///
-    /// Besiege already puts a "versions" button on the same slots, but all it does
-    /// is navigate the browser into the autosave folder, which leaves you looking
-    /// at a hundred files called "aut 26.06.27 15-34-37". This is the button that
-    /// answers what actually changed.
+    /// The load screen is not uGUI: its slots are mesh objects in world space with
+    /// <c>SimpleUIButton</c> colliders on them, so there is no prefab to instantiate
+    /// and no layout group to add a child to. Every button here is therefore a copy
+    /// of one of the screen's own, which brings the right mesh, material, collider
+    /// and press behaviour with it, wearing a face drawn by <see cref="IconArt"/>.
     /// </summary>
     public class BrowserWatch : MonoBehaviour
     {
@@ -43,26 +36,22 @@ namespace GitView
         private const int IconSize = 128;
 
         /// <summary>
-        /// The mark over a chosen machine's thumbnail is drawn larger than a
-        /// button's icon, because it carries a number as well as a glyph and is
-        /// read from across the page.
+        /// The mark over a chosen machine's thumbnail, drawn larger than a button's
+        /// icon: it carries a number as well as a glyph and is read across the page.
         /// </summary>
         private const int BadgeSize = 192;
 
         /// <summary>
-        /// How big the branch glyph is drawn against the button it replaces.
-        ///
-        /// Matching that button exactly comes out looking heavier than the game's
-        /// own icons: a trash can is drawn with white space around it inside its
-        /// sprite, and the branch fills nearly all of its own. Three quarters is
-        /// what puts the two at the same weight beside each other.
+        /// How big the branch is drawn against the button it replaces. Matching that
+        /// button exactly looks heavier than the game's own icons, which are drawn
+        /// with white space around them inside their sprites.
         /// </summary>
         private const float IconScale = 0.75f;
 
         /// <summary>
-        /// Shaders to draw the button's face with, best first. Only shaders
-        /// included in the player's build can be found by name, so this tries
-        /// several. `Particles/Alpha Blended` is known to be in Besiege's.
+        /// Shaders to draw a button's face with, best first. Only shaders in the
+        /// player's build can be found by name, so several are tried;
+        /// `Particles/Alpha Blended` is known to be in Besiege's.
         /// </summary>
         private static readonly string[] IconShaders =
         {
@@ -95,10 +84,7 @@ namespace GitView
         private readonly List<int> _attempts = new List<int>();
 
         private HistoryView _history;
-        private bool _reportedFaces;
         private float _nextPoll;
-        private bool _reportedLayout;
-        private bool _reportedNames;
 
         /// <summary>The one compare-them-all button, or null while the browser is shut.</summary>
         private GameObject _diffAll;
@@ -108,7 +94,7 @@ namespace GitView
 
         /// <summary>
         /// What the compare button can be hit on, taken before its tooltip was hung
-        /// off it -- the tooltip's own colliders are meant to stay switched off.
+        /// off it: the tooltip's own colliders are meant to stay switched off.
         /// </summary>
         private Collider[] _hits;
 
@@ -133,8 +119,8 @@ namespace GitView
 
         private void Update()
         {
-            // Every frame, unlike the rest of this: a tooltip that waited a quarter
-            // of a second for the sweep would be a tooltip that lags the pointer.
+            // Every frame, unlike the rest of this: a tooltip that waited for the
+            // sweep would lag the pointer.
             ShowTipOnHover();
             KeepPressable();
 
@@ -187,13 +173,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Whether this slot is a machine that can be chosen for a comparison.
-        ///
-        /// Any machine file, wherever it is -- including the versions inside an
-        /// autosave folder, which is the whole point of being able to choose two
-        /// things by hand. Not folders: pressing the compare button on one of those
-        /// already means "every version of this machine", and choosing a folder
-        /// would have to mean something different from choosing a file.
+        /// Whether this slot is a machine that can be chosen for a comparison: any
+        /// machine file, including the versions inside an autosave folder. Not
+        /// folders -- pressing the branch on one of those already means "every version
+        /// of this machine".
         /// </summary>
         private static bool CanChoose(FileBrowserSlot slot)
         {
@@ -205,16 +188,9 @@ namespace GitView
 
         /// <summary>
         /// Whether this slot is a machine's history: one of the folders inside
-        /// AutoSave, each of which is every version of one machine.
-        ///
-        /// Only those. A machine's own slot out in SavedMachines used to carry this
-        /// button as well, and it was one branch too many: the slot already has
-        /// Besiege's own button for going to that machine's autosaves, and this mod
-        /// already puts a branch on it -- the one that adds it to a comparison --
-        /// so a second, differently-meaning branch two icons along was three ways of
-        /// saying "versions" in one corner. Follow the game's own button into the
-        /// folder and the history button is on the folder, where it says exactly
-        /// what it does.
+        /// AutoSave. Only those -- a machine's own slot already carries Besiege's
+        /// button for going to its autosaves and this mod's button for adding it to a
+        /// comparison, and a third branch in the same corner was one too many.
         /// </summary>
         private static bool ShouldOfferHistory(FileBrowserSlot slot)
         {
@@ -248,10 +224,8 @@ namespace GitView
 
         /// <summary>
         /// The button that picks this machine out to be compared with another one.
-        ///
-        /// Above the row along the bottom rather than in it: that row is where a
-        /// slot keeps the things it does to itself -- load, delete, versions -- and
-        /// this is about this machine and another one.
+        /// Above the row along the bottom rather than in it: that row is what a slot
+        /// does to itself, and this is about this machine and another.
         /// </summary>
         private void AddSelectButton(FileBrowserSlot slot)
         {
@@ -260,7 +234,6 @@ namespace GitView
             {
                 return;
             }
-            ReportButtons(slot);
             SimpleUIButton button = CloneButton(slot, template, SelectName,
                                                 AboveCorner(slot, template), FacePlus);
             if (button == null)
@@ -272,9 +245,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Copies one of the slot's own buttons, which brings the right mesh,
-        /// material, collider and press behaviour with it, and puts one of our
-        /// faces on it.
+        /// Copies one of the slot's own buttons -- which brings the right mesh,
+        /// material, collider and press behaviour -- and puts one of our faces on it.
         /// </summary>
         private SimpleUIButton CloneButton(FileBrowserSlot slot, SimpleUIButton template,
                                            string name, Vector3 spot, string face)
@@ -299,23 +271,17 @@ namespace GitView
                 Destroy(clone);
                 return null;
             }
-            // A clone carries the prefab's serialised state but not its delegates,
-            // since those are not serialised. Clearing them anyway costs nothing and
-            // means a future Besiege that does wire them up cannot leave this button
-            // also deleting the machine.
+            // A clone carries no delegates, those not being serialised. Clearing them
+            // anyway means a future Besiege that wires them up in Awake cannot leave
+            // this button also deleting the machine.
             button.ResetDelegates();
             return button;
         }
 
         /// <summary>
-        /// Straight above the leftmost icon in the slot's bottom row -- the corner
-        /// of the picture, over the steam mark.
-        ///
-        /// Taken off the row rather than off one button found by name, which is what
-        /// this did: the cloud is the *second* icon along, so the button sat over
-        /// the middle of the row with the corner beside it empty. The leftmost of
-        /// whatever the slot is showing is a place that stays the corner however
-        /// many icons a machine happens to have.
+        /// Straight above the leftmost icon in the slot's bottom row. Taken off the
+        /// row rather than off one button found by name: the leftmost of whatever the
+        /// slot is showing stays the corner however many icons a machine has.
         /// </summary>
         private Vector3 AboveCorner(FileBrowserSlot slot, SimpleUIButton template)
         {
@@ -354,70 +320,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// One of the slot's own buttons, by name.
-        ///
-        /// By name because <c>FileBrowserSlot</c> keeps every one of them in a
-        /// private field -- `cloudButton`, `loadAsSelectionButton` and the rest are
-        /// all unreachable from a mod, as is the text mesh holding the file name.
-        /// A name is a weaker handle than a field and it is the handle there is; a
-        /// miss costs the fallback placement rather than the button.
-        /// </summary>
-        /// <summary>
-        /// Writes down what a slot's buttons are called, once.
-        ///
-        /// The two new buttons are placed off buttons found by name, and the names
-        /// are Besiege's rather than anything documented. If either lands somewhere
-        /// strange, this line says whether the name was found at all or whether the
-        /// fallback placement is what is on screen.
-        /// </summary>
-        private void ReportButtons(FileBrowserSlot slot)
-        {
-            if (_reportedNames)
-            {
-                return;
-            }
-            _reportedNames = true;
-
-            StringBuilder names = new StringBuilder();
-            SimpleUIButton[] buttons = slot.GetComponentsInChildren<SimpleUIButton>(true);
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                if (buttons[i] == null || buttons[i].gameObject == slot.gameObject)
-                {
-                    continue;
-                }
-                names.Append(names.Length == 0 ? "" : ", ").Append(buttons[i].name);
-                if (!buttons[i].gameObject.activeInHierarchy)
-                {
-                    names.Append(" (hidden)");
-                }
-            }
-            Log.Info("slot buttons: " + (names.Length == 0 ? "none" : names.ToString()) +
-                     "; matched cloud=" + (Named(slot, "cloud") != null) +
-                     " selection=" + (Named(slot, "selection") != null) + ".");
-        }
-
-        private static SimpleUIButton Named(FileBrowserSlot slot, string part)
-        {
-            SimpleUIButton[] buttons = slot.GetComponentsInChildren<SimpleUIButton>(true);
-            for (int i = 0; i < buttons.Length; i++)
-            {
-                if (buttons[i] == null || buttons[i].gameObject == slot.gameObject)
-                {
-                    continue;
-                }
-                if (buttons[i].name.ToLower().Contains(part))
-                {
-                    return buttons[i];
-                }
-            }
-            return null;
-        }
-
-        /// <summary>
-        /// Which of the slot's own buttons to copy. An active one is preferred --
-        /// it is definitely laid out and definitely visible -- and one with
-        /// something to draw is preferred over one without.
+        /// Which of the slot's own buttons to copy: an active one, which is definitely
+        /// laid out and visible, and one with something to draw.
         /// </summary>
         private static SimpleUIButton PickTemplate(FileBrowserSlot slot)
         {
@@ -446,21 +350,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Where to put the button: the gap in the middle of the row of buttons
-        /// along the bottom of a slot.
+        /// Where to put the button: the gap in the row along the bottom of a slot.
         ///
-        /// Measured on a real slot: nine SimpleUIButtons, of which exactly one is
-        /// on show -- the delete button, in a bottom corner at x = 1.2. So the
-        /// opposite corner is the place, and the general rules below are for the
-        /// slots that have more than one.
-        ///
-        /// All of it is worked out from where the slot's own buttons actually are
-        /// rather than from numbers measured off a screenshot, because a hardcoded
-        /// offset would not survive Besiege moving anything.
-        ///
-        /// An earlier version stepped one pitch left of the leftmost button, where
-        /// pitch was the smallest gap between any two -- counting the hidden ones,
-        /// two of which are 0.018 apart, so the new button landed on top of one.
+        /// Worked out from where the slot's own buttons actually are rather than from
+        /// numbers off a screenshot, since a hardcoded offset would not survive
+        /// Besiege moving anything. A real slot has nine SimpleUIButtons with exactly
+        /// one on show -- delete, in a bottom corner -- so the opposite corner is the
+        /// place, and the rules below are for slots with more.
         /// </summary>
         private Vector3 FreeSpot(FileBrowserSlot slot, SimpleUIButton template)
         {
@@ -472,10 +368,9 @@ namespace GitView
 
             if (places.Count == 1)
             {
-                // The usual case, as it turns out: a slot has one button on show
-                // and it is in a bottom corner. The opposite corner is its mirror
-                // through the middle of the slot, which is both certainly free and
-                // where a second button would have gone if Besiege had one.
+                // The usual case: one button on show, in a bottom corner. Its mirror
+                // through the middle of the slot is certainly free, and is where a
+                // second button would have gone if Besiege had one.
                 spot = new Vector3(-places[0].x, places[0].y, places[0].z);
             }
             else if (places.Count >= 2)
@@ -512,8 +407,6 @@ namespace GitView
             {
                 spot = new Vector3(spot.x, spot.y + step, spot.z);
             }
-
-            ReportLayout(places, spot, step);
             return spot;
         }
 
@@ -524,9 +417,9 @@ namespace GitView
             for (int i = 0; i < buttons.Length; i++)
             {
                 SimpleUIButton button = buttons[i];
-                // Only the ones that are actually on screen: a slot carries hidden
-                // buttons for uploading, cloud sync and confirming a delete, and
-                // avoiding places nobody can see would use up the whole slot.
+                // Only the ones actually on screen: a slot carries hidden buttons for
+                // uploading, cloud sync and confirming a delete, and avoiding places
+                // nobody can see would use up the whole slot.
                 if (button != null && button.gameObject != slot.gameObject &&
                     button.name != ButtonName && button.gameObject.activeInHierarchy)
                 {
@@ -547,23 +440,6 @@ namespace GitView
                 }
             }
             return true;
-        }
-
-        private void ReportLayout(List<Vector3> places, Vector3 spot, float step)
-        {
-            if (_reportedLayout)
-            {
-                return;
-            }
-            _reportedLayout = true;
-
-            StringBuilder found = new StringBuilder();
-            for (int i = 0; i < places.Count; i++)
-            {
-                found.Append(i == 0 ? "" : " ").Append(places[i]);
-            }
-            Log.Info("slot buttons at " + found + "; compare button at " + spot +
-                     " (step " + step.ToString("0.###") + ").");
         }
 
         /// <summary>A button's width in the slot's own units, not the world's.</summary>
@@ -589,14 +465,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Tries to put our glyph on every copy that is still wearing the icon it
-        /// was cloned from, and drops the ones that are done or gone.
-        ///
-        /// Retried across frames rather than done once at clone time, because a
-        /// slot button's face need not exist in the frame it is cloned: whatever
-        /// builds it runs in an Awake or a Start of its own. Asking too early finds
-        /// a button with no mesh anywhere on it, which is what the log said was
-        /// happening.
+        /// Tries to put our glyph on every copy still wearing the icon it was cloned
+        /// from, and drops the ones that are done or gone. Retried across frames
+        /// rather than done at clone time: a slot button's face need not exist in the
+        /// frame it is cloned, since whatever builds it runs in an Awake of its own.
         /// </summary>
         private void RepaintPending()
         {
@@ -633,21 +505,16 @@ namespace GitView
             _unpainted.Add(button);
             _wanted.Add(face);
             _attempts.Add(0);
-            // The first go is free: if the face is already there this is done in
-            // the frame the button appears, and nothing flickers.
+            // The first go is free: if the face is already there, nothing flickers.
             RepaintPending();
         }
 
         /// <summary>
-        /// Repaints whatever the copied button actually draws with.
-        ///
-        /// A sweep over every renderer and every kind of renderer, because what a
-        /// slot button is made of cannot be checked from out here. Two ways of
-        /// doing this have failed silently in game: setting
-        /// `material.mainTexture` (Besiege's shader need not sample it), and
-        /// parenting a quad of our own to the face (invisible). Assigning a whole
-        /// material to the button's own renderer keeps Besiege's geometry — right
-        /// plane, right winding, right size — and changes only what we chose.
+        /// Repaints whatever the copied button actually draws with -- a sweep over
+        /// every renderer and every kind of renderer, since what a slot button is made
+        /// of cannot be checked from out here. Setting `material.mainTexture` and
+        /// parenting a quad of our own both failed silently in game; assigning a whole
+        /// material keeps Besiege's geometry and changes only what we chose.
         /// </summary>
         private bool Paint(GameObject button, Texture2D face)
         {
@@ -664,7 +531,6 @@ namespace GitView
             {
                 return false;
             }
-            ReportFaces(renderers);
 
             Renderer painted = null;
             for (int i = 0; i < renderers.Length && painted == null; i++)
@@ -679,9 +545,9 @@ namespace GitView
                 return false;
             }
 
-            // Anything else it draws goes off. A button can be a glyph on a backing
-            // plate, and leaving the glyph on shows the icon we are replacing
-            // straight over the top of ours.
+            // Anything else it draws goes off: a button can be a glyph on a backing
+            // plate, and leaving the glyph on draws the icon we are replacing over
+            // the top of ours.
             for (int i = 0; i < renderers.Length; i++)
             {
                 if (renderers[i] != painted)
@@ -699,7 +565,7 @@ namespace GitView
                 return false;
             }
 
-            // A sprite ignores its material's texture and draws its own. This is
+            // A sprite ignores its material's texture and draws its own -- which is
             // what a slot button turns out to be.
             SpriteRenderer sprite = renderer as SpriteRenderer;
             if (sprite != null)
@@ -740,15 +606,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// The last resort: our own quad, sized and placed from the button's
-        /// collider.
-        ///
-        /// Only reached when nothing the button draws could be repainted after
-        /// several frames of trying. The collider is the one part of a
-        /// SimpleUIButton that has to exist — it is what makes it clickable — so
-        /// its bounds are a size and a place that can always be had. The quad is
-        /// wound both ways, because which side of it faces the camera is exactly
-        /// the sort of thing that cannot be known from here.
+        /// The last resort: our own quad, sized and placed from the button's collider,
+        /// reached when nothing the button draws could be repainted. The collider is
+        /// the one part of a SimpleUIButton that has to exist, so its bounds are a
+        /// size and a place that can always be had. Wound both ways, since which side
+        /// faces the camera cannot be known from here.
         /// </summary>
         private void Overlay(GameObject button, Texture2D face)
         {
@@ -775,8 +637,6 @@ namespace GitView
             icon.layer = button.layer;
             icon.GetComponent<MeshFilter>().sharedMesh = DoubleSidedQuad();
             icon.GetComponent<MeshRenderer>().sharedMaterial = material;
-            Log.Info("drew an icon on a quad of our own, " + side.ToString("0.###") +
-                     " across.");
         }
 
         private static Mesh DoubleSidedQuad()
@@ -797,8 +657,8 @@ namespace GitView
                 new Vector2(0f, 0f), new Vector2(1f, 0f),
                 new Vector2(1f, 1f), new Vector2(0f, 1f)
             };
-            // The same two triangles wound both ways, so back-face culling cannot
-            // be what makes the icon invisible.
+            // Wound both ways, so back-face culling cannot be what makes the icon
+            // invisible.
             _quad.triangles = new int[] { 0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3 };
             _quad.RecalculateNormals();
             _quad.hideFlags = HideFlags.HideAndDontSave;
@@ -806,13 +666,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Our glyph as a sprite the same size on screen as the one it replaces.
-        ///
-        /// A sprite is drawn <c>rect.height / pixelsPerUnit</c> units tall, and
-        /// <c>Sprite.Create</c> assumes 100 pixels per unit unless told otherwise.
-        /// Our texture is not the size of Besiege's, so taking that default drew
-        /// the branch at about half the trash can it sat next to. Matching the
-        /// replaced sprite's world height instead makes the two the same whatever
+        /// Our glyph as a sprite the same size on screen as the one it replaces. A
+        /// sprite is drawn <c>rect.height / pixelsPerUnit</c> units tall and
+        /// <c>Sprite.Create</c> assumes 100 unless told otherwise, so matching the
+        /// replaced sprite's world height is what makes the two the same size whatever
         /// either texture happens to be.
         /// </summary>
         private static Sprite IconSprite(Sprite replacing, Texture2D texture)
@@ -825,8 +682,7 @@ namespace GitView
             }
 
             // Cached per size rather than one shared sprite: different slots can
-            // carry differently authored buttons, and a sprite is cheap but not
-            // free.
+            // carry differently authored buttons.
             string key = texture.GetInstanceID() + "@" + Mathf.RoundToInt(density * 10f);
             Sprite made;
             if (_sprites.TryGetValue(key, out made) && made != null)
@@ -838,24 +694,17 @@ namespace GitView
                                  new Vector2(0.5f, 0.5f), density);
             made.hideFlags = HideFlags.HideAndDontSave;
             _sprites[key] = made;
-            Log.Info("icon sized at " + density.ToString("0.#") + " pixels per unit" +
-                     (replacing == null ? " (nothing to match)" : " to match " + replacing.name));
             return made;
         }
 
         /// <summary>
         /// A copy of the button's quad with its texture coordinates spread over the
-        /// whole of our icon.
+        /// whole of our icon. Besiege's UI meshes may carry coordinates into a shared
+        /// atlas rather than 0..1, and a mesh cut out for a trash can would show that
+        /// same corner of our texture. Remapping by position works whichever plane the
+        /// quad lies in.
         ///
-        /// Besiege's UI meshes may carry coordinates into a shared atlas rather
-        /// than 0..1, and a mesh cut out for a trash can would show that same
-        /// corner of our texture. Remapping by position works whichever plane the
-        /// quad lies in: the two axes it actually has a size in are the two the
-        /// picture goes on.
-        ///
-        /// Returns null if the mesh cannot be read -- Unity refuses on meshes
-        /// imported without read/write -- and the caller then keeps the original,
-        /// which is right far more often than it is wrong.
+        /// Null if the mesh cannot be read, and the caller then keeps the original.
         /// </summary>
         private static Mesh Unwrapped(Mesh original)
         {
@@ -919,56 +768,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Says once what the copied button is actually made of, and by what kind
-        /// of renderer.
-        ///
-        /// Everything about this button has had to be inferred from a running game
-        /// through a log file — three attempts at the icon, three silent failures —
-        /// so the inventory is worth the one line it costs. The kinds are tested
-        /// with `is` rather than asked for by name: Type.Name is
-        /// System.Reflection.MemberInfo.get_Name, and one of those is enough for
-        /// the mod loader to refuse the whole assembly.
-        /// </summary>
-        private void ReportFaces(Renderer[] renderers)
-        {
-            if (_reportedFaces)
-            {
-                return;
-            }
-            _reportedFaces = true;
-
-            StringBuilder inventory = new StringBuilder();
-            for (int i = 0; i < renderers.Length; i++)
-            {
-                Renderer renderer = renderers[i];
-                inventory.Append(i == 0 ? "" : ", ").Append(renderer.name).Append(' ');
-                if (renderer is SpriteRenderer) { inventory.Append("sprite"); }
-                else if (renderer is SkinnedMeshRenderer) { inventory.Append("skinned"); }
-                else if (renderer is MeshRenderer) { inventory.Append("mesh"); }
-                else { inventory.Append("other"); }
-
-                MeshFilter shape = renderer.GetComponent<MeshFilter>();
-                if (shape == null)
-                {
-                    inventory.Append(" no-filter");
-                }
-                else if (shape.sharedMesh == null)
-                {
-                    inventory.Append(" no-mesh");
-                }
-                else
-                {
-                    inventory.Append(' ').Append(shape.sharedMesh.bounds.size)
-                             .Append(shape.sharedMesh.isReadable ? "" : " unreadable");
-                }
-            }
-            Log.Info("copied button draws: " +
-                     (renderers.Length == 0 ? "nothing" : inventory.ToString()));
-        }
-
-        /// <summary>
-        /// One of the mod's faces, drawn once and kept: the branch, the compare
-        /// mark, or the compare mark carrying a number.
+        /// One of the mod's faces, drawn once and kept: the branch, the branch with a
+        /// plus, or the branch carrying a number.
         /// </summary>
         private static Texture2D IconTexture(string face)
         {
@@ -978,10 +779,9 @@ namespace GitView
                 return drawn;
             }
 
-            // The window's font, so the mark in the corner of an icon is the same
-            // lettering as the number in the window it opens. Null until UI Factory
-            // has loaded, which is why a face drawn without it is not kept: the next
-            // machine to be chosen should get the real thing.
+            // The window's font, so the mark in the corner is the same lettering as
+            // the number in the window it opens. Null until UI Factory has loaded,
+            // which is why a face drawn without it is not kept.
             Font font = UIF.Font;
             bool lettered = true;
             if (face == FaceBranch)
@@ -1020,8 +820,8 @@ namespace GitView
         private const string FacePlus = "plus";
 
         /// <summary>
-        /// The branch on a dark square, for a button that draws its plate and its
-        /// picture on the same quad. See <see cref="BuildDiffAllButton"/>.
+        /// The branch on a dark square, for a button whose plate could not be copied.
+        /// See <see cref="BuildDiffAllButton"/>.
         /// </summary>
         private const string FacePlated = "plated";
 
@@ -1054,9 +854,8 @@ namespace GitView
                 made = new Material(shader);
                 made.mainTexture = face;
                 made.color = Color.white;
-                // Particles/Alpha Blended doubles the texture against this, so a
-                // plain white keeps the glyph at full strength there and changes
-                // nothing under the shaders that ignore it.
+                // Particles/Alpha Blended doubles the texture against this; white
+                // keeps the glyph at full strength and changes nothing elsewhere.
                 if (made.HasProperty("_TintColor"))
                 {
                     made.SetColor("_TintColor", Color.white);
@@ -1082,12 +881,10 @@ namespace GitView
         private const float DimFactor = 0.45f;
 
         /// <summary>
-        /// Brings one slot into line with what has been chosen.
-        ///
-        /// Every sweep, for every slot, rather than only when something is pressed:
-        /// the browser reuses its slots for whatever file is on the page now, so a
-        /// mark put on a slot is not a mark on a machine until something keeps
-        /// checking that the slot is still showing the machine it was put there for.
+        /// Brings one slot into line with what has been chosen. Every sweep, for every
+        /// slot: the browser reuses its slots for whatever file is on the page now, so
+        /// a mark is not a mark on a machine until something keeps checking that the
+        /// slot still shows the machine it was put there for.
         /// </summary>
         private void Reconcile(FileBrowserSlot slot)
         {
@@ -1123,8 +920,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts the numbered mark on a slot and dims its picture, or moves the mark
-        /// to a new number if unchoosing something else has renumbered it.
+        /// Puts the numbered mark on a slot and dims its picture, or renumbers it if
+        /// unchoosing something else has moved it along.
         /// </summary>
         private void Mark(FileBrowserSlot slot, SlotMark mark, int ordinal)
         {
@@ -1139,11 +936,10 @@ namespace GitView
             {
                 mark.Badge = Badge(slot, ordinal);
             }
-            // Asked again every sweep rather than only when the mark is new: a
-            // thumbnail arrives when its file has finished loading, which can be
-            // several sweeps after the slot appeared and is always after the page
-            // is turned back to. Whatever the browser has just painted over the top
-            // of ours is dimmed again from here.
+            // Asked every sweep rather than only when the mark is new: a thumbnail
+            // arrives when its file has finished loading, which can be several sweeps
+            // after the slot appeared, and whatever the browser has painted over ours
+            // is dimmed again from here.
             Material material = PictureMaterial(slot);
             if (material != null && material.mainTexture != mark.Dimmed)
             {
@@ -1158,12 +954,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes the mark off a slot and puts its picture back.
-        ///
-        /// Only if the slot is still showing the dimmed copy we made, which is the
-        /// one question worth asking here: a slot handed to another machine has
-        /// been redrawn by the browser already, and putting the picture back then
-        /// would put the *previous* machine's picture on the one now in the slot.
+        /// Takes the mark off a slot and puts its picture back -- only if the slot is
+        /// still showing the dimmed copy we made. A slot handed to another machine has
+        /// been redrawn already, and putting the picture back then would put the
+        /// previous machine's picture on the one now in the slot.
         /// </summary>
         private void Drop(SlotMark mark)
         {
@@ -1178,8 +972,8 @@ namespace GitView
                 Material material = slot == null ? null : PictureMaterial(slot);
                 if (material != null && material.mainTexture == mark.Dimmed)
                 {
-                    // What we replaced, or failing that the browser's own copy,
-                    // which was never touched -- only the slot's material was.
+                    // What we replaced, or failing that the browser's own copy: only
+                    // the slot's material was ever touched.
                     Texture original = mark.Original;
                     if (original == null && slot.VirtualObject != null)
                     {
@@ -1198,12 +992,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// The big numbered mark, over the middle of the thumbnail.
-        ///
-        /// In front of it by as much as the slot's own buttons are in front of the
-        /// slot: which way "in front" is depends on how the browser is turned to
-        /// face the camera, and the buttons are the one thing here that is known to
-        /// be visible.
+        /// The big numbered mark, over the middle of the thumbnail and as far in front
+        /// of it as the slot's own buttons are: which way "in front" is depends on how
+        /// the browser faces the camera, and the buttons are the one thing here known
+        /// to be visible.
         /// </summary>
         private GameObject Badge(FileBrowserSlot slot, int ordinal)
         {
@@ -1258,9 +1050,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// How far in front of the slot to draw, taken from the button that is
-        /// furthest forward. A transparent quad level with the picture behind it
-        /// z-fights; one in front of everything the slot draws does not.
+        /// How far in front of the slot to draw, off the button furthest forward: a
+        /// transparent quad level with the picture behind it z-fights.
         /// </summary>
         private static float Front(FileBrowserSlot slot)
         {
@@ -1282,12 +1073,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Replaces a chosen machine's picture with a small, dark copy of itself.
-        ///
-        /// The original goes into the selection rather than into the slot, because
-        /// the browser caches a thumbnail on its own object for the machine: put
-        /// back only what the slot is holding and the dimmed copy survives in that
-        /// cache, and the machine comes up dim the next time the load screen opens.
+        /// Replaces a chosen machine's picture with a small, dark copy of itself. The
+        /// original is kept on the mark rather than left to the browser's own cache,
+        /// which holds a thumbnail per machine -- put back only what the slot is
+        /// holding and the machine comes up dim next time the screen opens.
         /// </summary>
         private void Dim(FileBrowserSlot slot, SlotMark mark)
         {
@@ -1314,11 +1103,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// What the picture is drawn with. The slot's own <c>ApplyTexture</c> is not
+        /// What the picture is drawn with. The slot's <c>ApplyTexture</c> is not
         /// public, but the material behind it is per-slot -- <c>ThumbnailComponent</c>
         /// takes it from <c>Renderer.material</c>, which instances one -- so setting
-        /// the texture on it is the same thing done from outside, and the game
-        /// setting its own texture later still works.
+        /// the texture from outside is the same thing.
         /// </summary>
         private static Material PictureMaterial(FileBrowserSlot slot)
         {
@@ -1327,9 +1115,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes every mark off every slot on screen and puts every dimmed picture
-        /// back. Used when the choosing is over, while there is still something to
-        /// put them back on.
+        /// Takes every mark off every slot and puts every dimmed picture back, while
+        /// there are still slots to put them back on.
         /// </summary>
         private void RestoreAll()
         {
@@ -1350,12 +1137,9 @@ namespace GitView
         // ------------------------------------------------------- comparing them all
 
         /// <summary>
-        /// Keeps the one compare-them-all button, up beside the load buttons.
-        ///
-        /// One button rather than one per machine: it is not about a machine. It
-        /// belongs where the other things that act on the whole screen are, which
-        /// is the row at the top, and it is only on show once there are two
-        /// machines to compare -- one machine is not a diff.
+        /// Keeps the one compare-them-all button, up beside the load buttons: it is
+        /// not about a machine, so it belongs in the row that acts on the whole
+        /// screen, and it is only on show once there are two machines to compare.
         /// </summary>
         private void KeepDiffAllButton()
         {
@@ -1373,10 +1157,9 @@ namespace GitView
                 if (!enough)
                 {
                     // A button that goes away under the pointer is never told the
-                    // pointer left, so its tooltip would be waiting, still shown,
-                    // the next time there is something to compare. Besiege's own is
-                    // worse than shown: it remembers that it is open, and a tooltip
-                    // that thinks it is already open does not open again.
+                    // pointer left, so its tooltip would still be shown next time --
+                    // and Besiege's own would think it was already open and not open
+                    // again.
                     if (_tip != null)
                     {
                         _tip.OnMouseExit();
@@ -1389,8 +1172,8 @@ namespace GitView
                 }
                 _diffAll.SetActive(enough);
             }
-            // The plate is not a child of the button -- it belongs to the row -- so
-            // it has to be shown and hidden with it by hand.
+            // The plate belongs to the row rather than to the button, so it has to be
+            // shown and hidden with it by hand.
             if (_plate != null && _plate.activeSelf != enough)
             {
                 _plate.SetActive(enough);
@@ -1402,25 +1185,21 @@ namespace GitView
         }
 
         /// <summary>
-        /// Copies one of the load buttons at the top of the screen -- the whole
-        /// button, as it stands, with what it draws and how it behaves left on it.
+        /// Copies one of the load buttons at the top of the screen -- the whole button
+        /// as it stands, with what it draws and how it behaves left on it, which is
+        /// the only way to be the same size, material and shape as its neighbours.
+        /// Stripping it to the one component that makes it clickable cost it the plate
+        /// under its icon and its animated tooltip, both of which then had to be
+        /// imitated.
         ///
-        /// Copied from a neighbour, as everything else here is: it is the only way
-        /// to be the same size, the same material and the same shape as the buttons
-        /// it stands beside. It used to be copied and then stripped down to the one
-        /// component that makes it clickable, which cost it the plate under its icon
-        /// -- drawn back into our own texture -- and the animated tooltip, drawn back
-        /// as a quad of ours. Both were imitations of the button standing next to it.
-        ///
-        /// Two things come off, and only two: <c>LoadSaveButton</c>, which knows
-        /// which of "load" and "save" this is and would repaint our icon with one of
-        /// them, and anything from <c>Localisation</c>, which would put "load
-        /// machine" back over our own words at the next language change.
+        /// Two things come off and only two: <c>LoadSaveButton</c>, which would
+        /// repaint our icon with "load" or "save", and anything from
+        /// <c>Localisation</c>, which would put the game's words back over ours.
         /// </summary>
         private GameObject BuildDiffAllButton()
         {
             // Whatever the last browser left behind went with it when the screen
-            // closed, and a destroyed object is not something to keep asking.
+            // closed.
             _press = null;
             _tip = null;
             _hits = null;
@@ -1433,9 +1212,9 @@ namespace GitView
                 return null;
             }
 
-            // The rightmost one that is actually on screen. A hidden load button is
-            // a different size and in a different place, and copying one puts ours
-            // somewhere nobody can see and at a scale nothing else is drawn at.
+            // The rightmost one actually on screen: a hidden load button is a
+            // different size in a different place, and copying one would put ours
+            // somewhere nobody can see.
             LoadSaveButton rightmost = null;
             for (int i = 0; i < loads.Length; i++)
             {
@@ -1454,8 +1233,8 @@ namespace GitView
                 return null;
             }
 
-            // Worked out before the copy exists, so the copy cannot be mistaken for
-            // one of the buttons the row is measured from.
+            // Worked out before the copy exists, so it cannot be mistaken for one of
+            // the buttons the row is measured from.
             Vector3 spot = RightOfRow(rightmost.transform);
 
             GameObject clone = Instantiate(rightmost.gameObject) as GameObject;
@@ -1470,17 +1249,13 @@ namespace GitView
             clone.transform.localPosition = spot;
 
             // The button's own colliders, taken before the tooltip is hung off it:
-            // the tooltip brings colliders of its own, and those are meant to stay
-            // switched off. See KeepPressable.
+            // that brings colliders of its own, meant to stay off. See KeepPressable.
             _hits = clone.GetComponentsInChildren<Collider>(true);
 
-            // Only the picture is repainted, and nothing is turned off. The glyph
-            // goes on bare: the dark plate behind a load button is not part of the
-            // button, so the copy gets a copy of the plate as well -- see CopyPlate --
-            // rather than a plate painted into its own picture. Which matters for
-            // more than fidelity: the button swells under the pointer, and a plate
-            // inside the button swells with it, where the game's plates hold still
-            // and only the icon on them grows.
+            // Only the picture is repainted and nothing is turned off. The glyph goes
+            // on bare and the plate is copied separately -- see CopyPlate -- because
+            // the button swells under the pointer, and a plate painted into its icon
+            // would swell with it where the game's plates hold still.
             Renderer face = IconRenderer(clone);
             Undress(clone);
             // Where no plate could be copied the glyph brings one of its own, so that
@@ -1503,11 +1278,9 @@ namespace GitView
                 Destroy(clone);
                 return null;
             }
-            // Cleared rather than replaced: a copied button brings no delegates of
-            // its own, but a future Besiege that wires them up in Awake would have
-            // this one still loading a machine. Nothing of ours is added -- the press
-            // is watched for in KeepPressable, which works whether or not the button
-            // is in a state to notice it.
+            // Cleared rather than replaced, in case a future Besiege wires them up in
+            // Awake. Nothing of ours is added: the press is watched for in
+            // KeepPressable, which works whether or not the button can notice it.
             button.ResetDelegates();
             _press = button;
 
@@ -1518,13 +1291,10 @@ namespace GitView
             {
                 AddTip(clone, button);
             }
-            // The words belong to the button, and this is a new one -- the browser
-            // takes the last with it when it closes. Without this the tooltip on the
-            // second visit is a blank plate, because what it should say is what it
-            // already said.
+            // The words belong to the button and this is a new one, so what it "last
+            // said" has to be forgotten or the second visit shows a blank plate.
             _tipWords = string.Empty;
             clone.SetActive(false);
-            Log.Info("added the compare-them-all button at " + spot + ".");
             return clone;
         }
 
@@ -1532,18 +1302,12 @@ namespace GitView
         /// Copies the tooltip off the button this one was copied from: the plate, the
         /// arrow, the lettering and the slide it comes out with.
         ///
-        /// The words a tooltip shows live on a <c>tooltipParent</c> transform, and
-        /// that transform is not inside the button -- so a copy of the button points
-        /// at the *original's* words, in the original's place, which is what hovering
-        /// ours used to light up. Copying that object too, hanging it off our button
-        /// at the same offset it has from its own, and pointing our tooltip at the
-        /// copy gives us one of our own to write on.
-        ///
-        /// <c>Reset</c> is what makes it take: it re-finds every renderer and text
-        /// under the parent it has now been given, works out which way the arrow
-        /// points, and leaves the lot switched off until the pointer arrives. The
-        /// plate is resized to the words every time it opens, so ours can say
-        /// anything and be the right shape.
+        /// The words live on a <c>tooltipParent</c> transform that is not inside the
+        /// button, so a copy of the button points at the *original's* words in the
+        /// original's place. Copying that object too and pointing our tooltip at the
+        /// copy gives us one to write on. <c>Reset</c> is what makes it take: it
+        /// re-finds every renderer and text under its new parent, works out which way
+        /// the arrow points, and leaves the lot off until the pointer arrives.
         /// </summary>
         private bool CopyTip(GameObject original, GameObject clone)
         {
@@ -1562,15 +1326,13 @@ namespace GitView
             }
             words.name = TipName;
 
-            // Placed in the world rather than in the button's own space: our button
-            // has been grown to the size of the plate it stands on, and a tooltip
-            // laid out in its space would be grown with it. The same distance below
-            // our button as theirs is below its own, at the same size and facing the
-            // same way, whatever either button has been scaled to.
+            // Placed in the world rather than in the button's own space: the same
+            // distance below our button as theirs is below its own, at the same size
+            // and facing the same way, whatever either has been scaled to.
             Transform at = words.transform;
             at.SetParent(clone.transform, false);
-            at.localScale = Ratio(theirs.tooltipParent.lossyScale,
-                                  clone.transform.lossyScale);
+            at.localScale = Relative.Scale(theirs.tooltipParent.lossyScale,
+                                           clone.transform.lossyScale);
             at.rotation = theirs.tooltipParent.rotation;
             at.position = clone.transform.position +
                           (theirs.tooltipParent.position - original.transform.position);
@@ -1592,31 +1354,23 @@ namespace GitView
         }
 
         /// <summary>
-        /// Copies the dark plate the button it was copied from sits on, and puts it
+        /// Copies the dark plate the button this one came from sits on, and puts it
         /// behind ours.
         ///
-        /// The plate is not part of the button. Copying a load button gets you a bare
-        /// glyph about three fifths the height of the buttons beside it, whatever you
-        /// keep on it, because the square behind it belongs to the row rather than to
-        /// the control -- the same trick the tooltip plays with its words.
+        /// The plate is not part of the button -- the square behind it belongs to the
+        /// row, the same trick the tooltip plays with its words -- so a copied load
+        /// button is a bare glyph about three fifths the height of its neighbours.
+        /// Painting a plate into our own icon and growing the button to match came out
+        /// small twice: the hover swell sets the scale from a size it remembers, so it
+        /// puts back the size we grew from and grows the plate with it.
         ///
-        /// Two earlier attempts painted a plate into our own icon and grew the button
-        /// to match. Both came out small, and the reason is in the third screenshot:
-        /// the button swells under the pointer, and whatever swells it sets the scale
-        /// from a size it remembers -- so it puts back the size we grew it from, and
-        /// on the way it grows the plate as well, where the game's plates hold still
-        /// and only the icon on them moves.
-        ///
-        /// A copy of the plate, parented where the plate is rather than to the
-        /// button, has neither problem: it is the game's own square, at the game's
-        /// own size, and nothing animates it.
+        /// A copy of the plate, parented where the plate is, has neither problem.
         /// </summary>
         private bool CopyPlate(GameObject original, GameObject clone)
         {
             Renderer plate = PlateRenderer(original);
             if (plate == null || plate.transform.parent == null)
             {
-                Log.Info("no plate found behind the load buttons to copy.");
                 return false;
             }
 
@@ -1627,8 +1381,8 @@ namespace GitView
             }
             copy.name = PlateName;
             Undress(copy);
-            // A plate is something to look at. If the one we copied had a collider on
-            // it, ours would be a second thing in the row for the mouse to find.
+            // A plate is something to look at: with a collider on it, ours would be a
+            // second thing in the row for the mouse to find.
             Collider[] boxes = copy.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < boxes.Length; i++)
             {
@@ -1649,20 +1403,14 @@ namespace GitView
 
             _plate = copy;
             copy.SetActive(false);
-            Log.Info("copied the plate behind the load buttons for the compare " +
-                     "button.");
             return true;
         }
 
         /// <summary>
         /// The plate behind a button: the thing drawn around it that its icon sits
-        /// inside.
-        ///
-        /// Searched from the button's parent rather than from the button, because the
-        /// plate need not be part of it -- and this way it is found whether it turns
-        /// out to be a sibling, a parent or a child. Anything much bigger than the
-        /// icon is not a plate but the panel the whole row is on, and copying that
-        /// would put a second load screen on the screen.
+        /// inside. Searched from the button's parent, since the plate need not be part
+        /// of it, so it is found whether it is a sibling, a parent or a child.
+        /// Anything much bigger than the icon is the panel the whole row is on.
         /// </summary>
         private static Renderer PlateRenderer(GameObject button)
         {
@@ -1703,24 +1451,11 @@ namespace GitView
         /// <summary>The name given to the copied plate, so it can be found again.</summary>
         public const string PlateName = "GitViewComparePlate";
 
-        /// <summary>One scale as a fraction of another, per axis.</summary>
-        private static Vector3 Ratio(Vector3 want, Vector3 by)
-        {
-            return new Vector3(Math.Abs(by.x) < 0.0001f ? 1f : want.x / by.x,
-                               Math.Abs(by.y) < 0.0001f ? 1f : want.y / by.y,
-                               Math.Abs(by.z) < 0.0001f ? 1f : want.z / by.z);
-        }
-
         /// <summary>
-        /// The renderer a button draws its icon on, guessed as the smallest thing
-        /// it draws.
-        ///
-        /// <c>LoadSaveButton</c> names it in `buttonMeshRenderer` and that field is
-        /// private like every other one in the browser, so the size is what there is
-        /// to go on -- and it is a good deal better than a guess: a button is an
-        /// icon on a plate, and the plate is what the icon is drawn on top of, so it
-        /// is never the smaller of the two. Repainting the smallest leaves the plate
-        /// where it is, which is the whole point.
+        /// The renderer a button draws its icon on: the smallest thing it draws.
+        /// <c>LoadSaveButton</c> names it in a private field like everything else in
+        /// the browser, so size is what there is to go on -- and a button is an icon
+        /// on a plate, so the icon is never the larger of the two.
         /// </summary>
         private static Renderer IconRenderer(GameObject clone)
         {
@@ -1747,17 +1482,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// The next place along a row of buttons: one more step to the right of the
-        /// rightmost one that is still part of the row the given button is in.
-        ///
-        /// Walked rather than measured off the two load buttons, which is what this
-        /// did and what put ours a button and a half away from its neighbour. The
-        /// buttons up there are not all of a type -- "load as selection" is not a
-        /// <c>LoadSaveButton</c> at all -- so the gap between the two that are is
-        /// not the gap the row is actually drawn on. Hopping from button to button
-        /// while the next one is close enough to be beside this one finds the end of
-        /// the row and the pitch it was laid out on, whatever the buttons happen to
-        /// be made of.
+        /// The next place along a row of buttons: one step right of the rightmost one
+        /// still part of the row. Walked rather than measured off the two load
+        /// buttons, which are not all the row is made of -- "load as selection" is not
+        /// a <c>LoadSaveButton</c> -- so the gap between those two is not the pitch the
+        /// row is drawn on. Hopping button to button finds both.
         /// </summary>
         private static Vector3 RightOfRow(Transform anchor)
         {
@@ -1810,12 +1539,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// How wide a button is, in the units of whatever it is parented to.
-        ///
-        /// Off the collider first: it is what makes a button clickable, so it is
-        /// the one part that has to be there and is the button's own size. A
-        /// renderer's bounds would take in anything else hanging off it -- a
-        /// tooltip, for one, which is wider than the button by a good deal.
+        /// How wide a button is, in the units of whatever it is parented to. Off the
+        /// collider first, that being the one part which has to exist and is the
+        /// button's own size: a renderer's bounds would take in its tooltip.
         /// </summary>
         private static float LocalWidth(Transform button)
         {
@@ -1847,22 +1573,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes off a copy the two things that would undo our own: the load button
-        /// itself, and anything that rewrites text in another language.
+        /// Takes off a copy the two things that would undo our own: <c>LoadSaveButton</c>,
+        /// which holds the load and save icons and would put one on the renderer we
+        /// are about to paint, and the <c>Localisation</c> behaviours, which exist to
+        /// put the game's own words back over anything else.
         ///
-        /// Everything else stays. That is the point of copying a button -- the plate
-        /// it draws, the way it lights up, the tooltip that slides out from under it
-        /// are all things it does, and re-implementing them was a worse copy of a
-        /// button that was right there.
-        ///
-        /// <c>LoadSaveButton</c> goes because it holds the load and save icons and
-        /// puts one of them on the renderer we are about to paint. The
-        /// <c>Localisation</c> behaviours go because they exist to put the game's own
-        /// words back over anything else, which is what our words would be.
-        ///
-        /// <c>DynamicText</c> goes with them for the same reason: it is what writes a
-        /// number or a key binding into a tooltip that has one, and this one does
-        /// not.
+        /// Everything else stays -- the plate, the way it lights up, the tooltip that
+        /// slides out from under it are all things the button already does.
         /// </summary>
         private static void Undress(GameObject clone)
         {
@@ -1880,14 +1597,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Whether a copied behaviour is one of the kinds that would undo our own
-        /// work.
-        ///
-        /// Named one at a time rather than matched on what the type is called.
-        /// Asking an object for the name of its type is <c>MemberInfo.get_Name</c>,
-        /// which is <c>System.Reflection</c>, which the mod loader refuses to load an
-        /// assembly for -- so the list is written out, and a localisation behaviour
-        /// the game adds later would have to be added here.
+        /// Whether a copied behaviour is one of the kinds that would undo our own work.
+        /// Named one at a time rather than matched on the type's name: that is
+        /// <c>MemberInfo.get_Name</c>, which is <c>System.Reflection</c>, which the mod
+        /// loader refuses to load an assembly for.
         /// </summary>
         private static bool Unwanted(MonoBehaviour behaviour)
         {
@@ -1899,21 +1612,18 @@ namespace GitView
         /// <summary>
         /// Keeps the copied button answering the mouse, and does its clicking.
         ///
-        /// Two things are going on, and the last screenshot separated them: the
-        /// tooltip came up and the press did nothing. Both are driven by the same
-        /// mouse messages on the same collider, so the collider is fine -- what is
-        /// not is <c>SimpleUIButton</c> itself. A press is only *finished* in that
-        /// behaviour's <c>LateUpdate</c>, and Unity does not call LateUpdate on a
-        /// disabled behaviour, while <c>Tooltip</c> is a behaviour of its own and
-        /// carries on regardless. Something on that button switches the button off
-        /// when the browser has nothing for it to act on.
+        /// The tooltip came up while the press did nothing, and both are driven by the
+        /// same mouse messages on the same collider -- so the collider is fine and
+        /// <c>SimpleUIButton</c> is not: a press is only *finished* in its
+        /// <c>LateUpdate</c>, which Unity does not call on a disabled behaviour, and
+        /// something switches that button off when the browser has nothing for it to
+        /// act on.
         ///
-        /// So it is switched back on every frame -- directly, because
-        /// <c>ToggleButton</c> returns without doing anything when the collider is
-        /// not on the button's own object -- and the press is watched for here as
-        /// well rather than left to the button's own <c>Click</c>. This button is on
-        /// screen only when there is something to compare: if it can be seen it can
-        /// be pressed, whatever the browser thinks.
+        /// So it is switched back on every frame -- directly, since
+        /// <c>ToggleButton</c> does nothing when the collider is not on the button's
+        /// own object -- and the press is watched for here. This button is on screen
+        /// only when there is something to compare: if it can be seen it can be
+        /// pressed.
         /// </summary>
         private void KeepPressable()
         {
@@ -1954,11 +1664,9 @@ namespace GitView
         /// <summary>Whether the press that is in progress started on our button.</summary>
         private bool _pressedOn;
 
-        // How big the tooltip is drawn and where it hangs, in button widths, off
-        // Besiege's own: a plate a little over half the button's height with a
-        // quarter of that again for the arrow above it, and the arrow's point a
-        // quarter of a button below the button. Sized by its height rather than its
-        // width, so the lettering stays one size however much of it there is.
+        // How big the fallback tooltip is drawn and where it hangs, in button widths,
+        // measured off Besiege's own. Sized by height rather than width, so the
+        // lettering stays one size however much of it there is.
         private const float TipHeight = 0.86f;
         private const float TipDrop = 1.19f;
 
@@ -1967,16 +1675,10 @@ namespace GitView
         private Texture2D _tipFace;
 
         /// <summary>
-        /// Hangs a tooltip under a button, hidden until the pointer is on it.
-        ///
-        /// A quad of ours with a picture of the words on it -- see
-        /// <see cref="IconArt.Words"/> for why the words are drawn rather than
-        /// written. The mesh, the material and the shader are the ones the mod's
-        /// icons are already drawn with, which is the only combination of those
-        /// three that has been seen to appear on this screen.
-        ///
-        /// Shown off <c>SimpleUIButton</c>'s own enter and exit events, which is how
-        /// the game's own tooltips are driven.
+        /// Hangs a tooltip under a button, hidden until the pointer is on it: a quad
+        /// of ours with a picture of the words on it. The mesh, material and shader
+        /// are the ones the mod's icons are already drawn with, that being the only
+        /// combination seen to appear on this screen.
         /// </summary>
         private void AddTip(GameObject clone, SimpleUIButton press)
         {
@@ -1987,11 +1689,10 @@ namespace GitView
             tip.layer = clone.layer;
             tip.GetComponent<MeshFilter>().sharedMesh = DoubleSidedQuad();
 
-            // Just under the button, in the button's own units: far enough down to
-            // be clear of it, near enough to belong to it. And a little in front of
-            // it, because the button sits in the panel the tooltip would otherwise
-            // hang inside -- which way "in front" is depends on how the browser is
-            // turned to face the camera, so it is asked rather than assumed.
+            // Just under the button in the button's own units, and a little in front
+            // of it, since the button sits in the panel the tooltip would otherwise
+            // hang inside. Which way "in front" is depends on how the browser faces
+            // the camera, so it is asked rather than assumed.
             float scale = Mathf.Abs(clone.transform.lossyScale.x);
             if (scale < 0.0001f)
             {
@@ -2041,20 +1742,16 @@ namespace GitView
         }
 
         /// <summary>
-        /// Shows the tooltip while the pointer is on the button.
-        ///
-        /// Asked of the collider directly, every frame, rather than left to
-        /// <c>SimpleUIButton</c>'s enter and exit events. Those are Unity's mouse
-        /// messages, they are how the game's own buttons work, and they are also the
-        /// thing that stops arriving the moment anything disables the collider --
-        /// which is how the first attempt at this came to show nothing at all.
-        /// <c>Collider.Raycast</c> asks one collider one question and cannot be
-        /// blocked by another.
+        /// Shows the fallback tooltip while the pointer is on the button. Asked of the
+        /// collider directly, every frame, rather than left to
+        /// <c>SimpleUIButton</c>'s enter and exit events: those are Unity's mouse
+        /// messages, and they stop arriving the moment anything disables the collider.
+        /// <c>Collider.Raycast</c> asks one collider one question.
         /// </summary>
         private void ShowTipOnHover()
         {
             // Besiege's own tooltip shows itself, off the same mouse messages the
-            // button hears; there is nothing to do here but stay out of its way.
+            // button hears.
             if (_tip != null || _diffAll == null || !_diffAll.activeInHierarchy)
             {
                 return;
@@ -2067,12 +1764,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Whether the pointer is on the compare button.
-        ///
-        /// Asked of the colliders the button itself was copied with, kept from before
-        /// its tooltip was hung off it: the tooltip brings colliders of its own, and
-        /// a search for "a collider under this button" would find one of those and
-        /// answer about the wrong box.
+        /// Whether the pointer is on the compare button. Asked of the colliders the
+        /// button was copied with, kept from before its tooltip was hung off it: a
+        /// search for "a collider under this button" would find the tooltip's.
         /// </summary>
         private bool PointerOver(GameObject button)
         {
@@ -2115,12 +1809,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts words on a button's tooltip, redrawing the picture of them when they
-        /// change -- which is only when the number of chosen machines changes.
-        ///
-        /// The quad is reshaped to whatever the words came out as, so that they are
-        /// the same height however many of them there are and the plate around them
-        /// keeps its margin.
+        /// Puts words on a button's tooltip, redrawing the picture only when they
+        /// change. The quad is reshaped to whatever the words came out as, so they are
+        /// the same height however many there are.
         /// </summary>
         private void Say(GameObject button, string words)
         {
@@ -2135,8 +1826,7 @@ namespace GitView
             }
 
             // Besiege's tooltip is text, not a picture of text: the words go on the
-            // meshes the copy brought with it and the plate is resized round them
-            // every time it opens.
+            // meshes the copy brought with it, and it resizes its own plate.
             if (_tip != null)
             {
                 _tipWords = words;
@@ -2172,8 +1862,8 @@ namespace GitView
             {
                 ink.sharedMaterial = IconMaterial(drawn);
             }
-            // The height is what is fixed -- that is the size of the lettering -- and
-            // the width follows from however many words there are.
+            // The height is fixed -- that is the size of the lettering -- and the
+            // width follows from however many words there are.
             Vector3 was = tip.localScale;
             tip.localScale = new Vector3(was.y * drawn.width / drawn.height, was.y,
                                          was.z);
@@ -2183,18 +1873,8 @@ namespace GitView
                 Destroy(_tipFace);
             }
             _tipFace = drawn;
-
-            if (!_saidTip)
-            {
-                _saidTip = true;
-                Log.Info("tooltip \"" + words + "\" drawn " + drawn.width + "x" +
-                         drawn.height + ", quad at " + tip.localPosition + " size " +
-                         tip.localScale + " (button " +
-                         button.transform.localScale + ").");
-            }
         }
 
-        private bool _saidTip;
         private bool _saidNoWords;
 
         // ------------------------------------------------------------------ pressing
@@ -2208,15 +1888,14 @@ namespace GitView
             }
             Selection.Toggle(slot.VirtualObject);
             // Next frame rather than in a quarter of a second, so the mark appears
-            // under the press. Through the poll rather than by sweeping from inside
-            // a click, which would put the whole sweep -- including building
-            // buttons -- inside the browser's own event.
+            // under the press -- but still through the poll, rather than sweeping from
+            // inside the browser's own click event.
             _nextPoll = 0f;
         }
 
         /// <summary>
-        /// Opens the chosen machines in the history window, where they can be
-        /// compared with each other the same way the versions of one machine are.
+        /// Opens the chosen machines in the history window, where they compare the
+        /// same way the versions of one machine do.
         /// </summary>
         private void OnDiffAllPressed()
         {
@@ -2226,10 +1905,8 @@ namespace GitView
             }
             List<VersionEntry> rows = Selection.AsRows();
             string title = Selection.Count + " MACHINES";
-            // The choosing is finished with, and the window about to open is what
-            // carries it from here. The pictures are put back before the browser
-            // closes rather than at the next sweep, because after it closes there
-            // are no slots left to put anything back on.
+            // The pictures are put back before the browser closes rather than at the
+            // next sweep: after it closes there are no slots left to put them on.
             RestoreAll();
             Selection.Clear();
             StartCoroutine(OpenHistory(title, rows, true));
@@ -2261,11 +1938,8 @@ namespace GitView
 
         /// <summary>
         /// Closes the load screen, then opens the newest version and the history
-        /// beside it.
-        ///
-        /// In that order and a frame apart: the browser is mid-click when this
-        /// runs, and loading a machine out from under it puts a load and a close
-        /// through the same frame.
+        /// beside it -- in that order and a frame apart, since the browser is mid-click
+        /// when this runs.
         /// </summary>
         private IEnumerator OpenHistory(string machineName, List<VersionEntry> versions,
                                         bool chosen)

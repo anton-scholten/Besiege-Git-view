@@ -3,13 +3,10 @@ using System;
 namespace GitView
 {
     /// <summary>
-    /// One row of the history: a saved .bsg, when it was written, and what it did
-    /// to the machine relative to the version before it.
-    ///
-    /// The counts start out unknown -- working them out means reading and diffing
-    /// every file in the folder, which happens in the background after the window
-    /// is already on screen. <see cref="Counted"/> says whether they mean anything
-    /// yet.
+    /// One row of the history: a saved .bsg, when it was written, and what it did to
+    /// the machine. The counts start out unknown -- reading and diffing every file
+    /// happens in the background once the window is up -- and <see cref="Counted"/>
+    /// says whether they mean anything yet.
     /// </summary>
     public class VersionEntry
     {
@@ -26,10 +23,8 @@ namespace GitView
         public DateTime Saved = DateTime.MinValue;
 
         /// <summary>
-        /// True for the snapshots Besiege takes when you save the machine yourself,
-        /// false for the ones the timer takes. Both are versions and both belong in
-        /// the list; the distinction is worth showing because a manual save is
-        /// usually a point the player thought was worth keeping.
+        /// True for the snapshots Besiege takes when you save, false for the timer's.
+        /// Worth showing: a manual save is a point somebody thought worth keeping.
         /// </summary>
         public bool Manual;
 
@@ -44,20 +39,15 @@ namespace GitView
         public bool Counted;
 
         /// <summary>
-        /// True when Besiege wrote this name and it was read: the kind and the time
-        /// both mean something. False for a file somebody renamed, whose date came
-        /// from the filesystem and whose kind is not known at all.
+        /// True when Besiege wrote this name and it was read, so the kind and the
+        /// time both mean something. False for a file somebody renamed.
         /// </summary>
         public bool Named;
 
         /// <summary>
-        /// Where this version comes in the machine's history: 1 for the oldest, and
-        /// the count of versions for the newest.
-        ///
-        /// Fixed to the timeline rather than to the row it happens to be on, so
-        /// sorting by a count does not renumber anything. That is the point of it:
-        /// with the list ordered by, say, how much each save removed, the numbers
-        /// are the only thing left saying which version came before which.
+        /// Where this version comes in the history: 1 for the oldest. Fixed to the
+        /// timeline rather than to the row, so with the list ordered by a count the
+        /// numbers are the only thing left saying which version came first.
         /// </summary>
         public int Number;
 
@@ -69,12 +59,9 @@ namespace GitView
 
         /// <summary>
         /// Reads the timestamp out of a name Besiege generated, which is
-        /// "&lt;aut|ver&gt; yy.MM.dd HH-mm-ss".
-        ///
-        /// Hand-parsed rather than handed to DateTime.ParseExact because the format
-        /// is the game's, not the player's locale's, and a machine whose culture
-        /// reads "26.06.27" as something else entirely would otherwise sort its own
-        /// history into nonsense.
+        /// "&lt;aut|ver&gt; yy.MM.dd HH-mm-ss". Hand-parsed rather than left to
+        /// DateTime.ParseExact, because the format is the game's and not the
+        /// player's locale's.
         /// </summary>
         public static bool TryReadStamp(string fileName, out DateTime stamp, out bool manual)
         {
@@ -123,32 +110,23 @@ namespace GitView
         }
 
         /// <summary>
-        /// Besiege's own epoch: its virtual filesystem carries a date as the
-        /// seconds since the first of January 2014, UTC.
+        /// Besiege's own epoch: <c>StaticSettings.GetTimestamp</c> dates every
+        /// <c>VirtualFile</c> in seconds since the first of January 2014, UTC. Not an
+        /// OLE automation date, which is what this used to be read as and which
+        /// overflows on a real machine's date.
         ///
-        /// Out of <c>StaticSettings.GetTimestamp</c>, which is what every
-        /// <c>VirtualFile</c> is given its date by -- the file's last write time in
-        /// UTC, less that instant. It is emphatically not an OLE automation date,
-        /// which is what this used to be read as: those count days since 1899 and
-        /// stop at the year 9999, so a real machine's date -- some four hundred
-        /// million, in seconds -- was out of range, threw, and left every chosen
-        /// machine with no timestamp at all.
-        ///
-        /// Reading it correctly is still not enough to get a date out of the load
-        /// screen, mind. <c>VirtualFile</c>'s constructor only asks the filesystem
-        /// for a write time when the path is *not* a child of
-        /// <c>FileSystemPath.Root</c>, and that root is "/" -- so on Linux every
-        /// absolute path is a child of it and every file in the browser is stamped
-        /// with <c>DateTime.Now</c> instead. That is why the machines chosen by hand
-        /// take their time from their newest autosave, whose name Besiege wrote the
-        /// real time into, and show none at all when there is no autosave to ask.
+        /// Reading it right is still not enough to date a file in the load screen:
+        /// <c>VirtualFile</c> only asks the filesystem for a write time when the path
+        /// is not a child of <c>FileSystemPath.Root</c>, which is "/" -- so on Linux
+        /// everything is stamped <c>DateTime.Now</c>. Hence hand-picked machines take
+        /// their time from their newest autosave, or show none.
         /// </summary>
         private static readonly DateTime Epoch =
             new DateTime(2014, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         /// <summary>
-        /// A date the browser carries, as a local time -- which is the clock the
-        /// file names are written in, so the two kinds of row read alike.
+        /// A date the browser carries, as a local time -- the clock the file names
+        /// are written in, so the two kinds of row read alike.
         /// </summary>
         public static DateTime FromTimestamp(double seconds)
         {
@@ -178,15 +156,9 @@ namespace GitView
 
         /// <summary>
         /// How a version is named in a sentence: "autosave 2026-06-27  15:34:37".
-        ///
-        /// The file name would do and is what this used to show, but it is Besiege's
-        /// shorthand rather than anybody's writing -- "ver 26.06.27 15-52-19" needs
-        /// knowing that "ver" is what the game calls the copy it keeps when you save
-        /// and "aut" is the one the timer takes. Spelled out, and in the same
-        /// timestamp the list is written in.
-        ///
-        /// A file whose name was not Besiege's keeps that name, because guessing
-        /// which kind it is would be inventing the one thing this says.
+        /// Spelled out rather than shown as "ver 26.06.27 15-52-19", which needs
+        /// knowing the game's shorthand. A file whose name was not Besiege's keeps
+        /// that name, since guessing its kind would invent the one thing this says.
         /// </summary>
         public string Title()
         {
@@ -198,19 +170,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// How the row reads: the name on the first line and the time under it,
-        /// which is the order the two headings over that column are in.
+        /// How the row reads: the name on the first line and the time under it, in
+        /// the order the two headings over that column are in.
         ///
-        /// A version out of an autosave folder is called "aut 26.06.27 15-34-37" --
-        /// a timestamp and nothing else -- so its name line holds what the name says
-        /// beyond the time, which is whether the player saved it themselves or the
-        /// timer took it. That leaves the timestamp on the line under the word TIME
-        /// rather than on the line under NAME, in step with every other row, instead
-        /// of one kind of row writing its time where another writes its name.
-        ///
-        /// A machine chosen by hand is called whatever the player called it, and that
-        /// is the first thing worth knowing about the row -- with the time under it,
-        /// because two machines with different names still have an order.
+        /// An autosave is called "aut 26.06.27 15-34-37" -- a timestamp and nothing
+        /// else -- so its name line holds what the name says beyond the time, which
+        /// is whether the player saved it or the timer did. The timestamp then stays
+        /// under TIME, in step with every other row.
         /// </summary>
         public string Lines()
         {
@@ -218,10 +184,8 @@ namespace GitView
             {
                 return (Manual ? "SAVED" : string.Empty) + "\n" + Stamp();
             }
-            // A machine nobody can put a time to is written as what it is: a name.
-            // Better an empty time column than a made-up one, and the load screen
-            // cannot always say when a machine was saved -- see
-            // <see cref="FromTimestamp"/>.
+            // A machine nobody can date is written as what it is: a name. Better an
+            // empty time column than a made-up one -- see FromTimestamp.
             return Saved == DateTime.MinValue ? FileName : FileName + "\n" + Stamp();
         }
 

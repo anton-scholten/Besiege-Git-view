@@ -8,23 +8,15 @@ namespace GitView
 {
     /// <summary>
     /// One block, reduced to the things a diff can be about: what it is, where it
-    /// is, and how it is set up.
-    ///
-    /// Deliberately a plain object rather than the game's <c>BlockInfo</c>. The
-    /// diff is the part of this mod that is actually right or wrong, so it is kept
-    /// free of anything that needs a running game and is covered by the headless
-    /// tests. <see cref="MachineSnapshot"/> is what converts the game's model into
-    /// these.
+    /// is, how it is set up. A plain object rather than the game's
+    /// <c>BlockInfo</c>, so the diff stays engine-free and testable headless.
     /// </summary>
     public class BlockRecord
     {
         /// <summary>
-        /// The block's own identity, as Besiege writes it into the .bsg.
-        ///
-        /// It is per-block, not per-block-type -- two identical girders have
-        /// different guids -- which makes it the natural key for "the same block,
-        /// one save later". It is not quite stable, though: see
-        /// <see cref="BlockDiff"/> for what happens when it changes underneath a
+        /// The guid Besiege writes into the .bsg: per block, not per block type, so
+        /// it is the natural key for "the same block, one save later". Not quite
+        /// stable -- see <see cref="BlockDiff"/> for when it changes underneath a
         /// block that did not.
         /// </summary>
         public string Id = string.Empty;
@@ -41,30 +33,24 @@ namespace GitView
         public string SkinName = string.Empty;
 
         /// <summary>
-        /// The block's settings -- slider values, toggles, key bindings -- flattened
-        /// into one string so they can be compared without knowing what any
-        /// particular block keeps in there.
+        /// Slider values, toggles and key bindings, flattened into one string so
+        /// they compare without knowing what a given block keeps in there.
         /// </summary>
         public string Settings = string.Empty;
 
         /// <summary>
         /// True for the blocks that are not in one place: a brace, a fuel line, a
-        /// winch. They are dragged between two points, and where the second point
-        /// is is as much a part of the block as where the first one is.
+        /// winch, dragged between two points.
         /// </summary>
         public bool HasSpan;
 
         /// <summary>
-        /// The two ends, in the block's own local space -- which is what Besiege
-        /// writes and what its own loader reads back through
-        /// <c>transform.TransformPoint</c>. Scale is part of that transform, so
-        /// these are only positions once <see cref="Scale"/> has been applied.
-        ///
-        /// Not compared by <see cref="Matches"/> and not meant to be: they are two
-        /// of the block's settings, so <see cref="Settings"/> already carries them,
-        /// and comparing them here as well would only say the same thing twice.
-        /// They are kept apart from it because the overlay has to draw them, and a
-        /// string is no use for that.
+        /// The two ends, in the block's own local space, as Besiege writes them and
+        /// reads them back through <c>transform.TransformPoint</c> -- so they are
+        /// positions only once <see cref="Scale"/> is applied. Not compared by
+        /// <see cref="Matches"/>: they are settings, so <see cref="Settings"/>
+        /// already carries them. They are kept apart because the overlay has to draw
+        /// them and a string is no use for that.
         /// </summary>
         public Vector3 SpanStart;
         public Vector3 SpanEnd;
@@ -73,17 +59,11 @@ namespace GitView
         /// The corners of a build surface, in the order they go round it, in the
         /// same space as <see cref="Position"/>.
         ///
-        /// A build surface is not one block but nine: the surface itself, four edges
-        /// and four corner nodes, each with a guid of its own. The surface names its
-        /// edges, an edge names the two nodes it runs between, and a node is where a
-        /// corner actually is -- so where the surface *is* can only be answered by
-        /// following those references through the rest of the machine, which is what
-        /// <c>VersionScan.LinkSurfaces</c> does once every block has been read.
-        ///
-        /// Filled in for the surface block. Null for everything else, including the
-        /// edges and nodes it is made of -- they are blocks in their own right and
-        /// keep their own rows in the count, but they draw nothing on their own:
-        /// there is no placement ghost for "a corner".
+        /// A surface is nine blocks -- itself, four edges, four corner nodes -- each
+        /// with its own guid: the surface names its edges, an edge names its two
+        /// nodes, and a node is where a corner is. So where a surface *is* can only
+        /// be answered by following those references, which <see cref="SurfaceShape"/>
+        /// does once every block has been read. Null on everything but the surface.
         /// </summary>
         public Vector3[] Corners;
 
@@ -94,38 +74,30 @@ namespace GitView
         }
 
         /// <summary>
-        /// How thick a build surface is drawn, which the player sets on the block.
-        /// The mark over it has to be thicker than that or it is drawn *inside* the
-        /// slab and cannot be seen at all. Besiege's own default where the block does
-        /// not say.
+        /// How thick the player made the slab. The mark over it has to be thicker
+        /// than this or it is drawn inside the block and cannot be seen. Besiege's
+        /// own default where the block does not say.
         /// </summary>
         public float Thickness = 0.08f;
 
-        // What the surface said before it was resolved: the guids it named. Kept on
-        // the record because linking happens after every block has been read, and
-        // this is where the answer was written down.
+        // What a surface and its edges named before they were resolved, kept here
+        // because linking happens only once every block has been read.
         public string[] EdgeIds;
         public string EdgeFrom = string.Empty;
         public string EdgeTo = string.Empty;
 
         /// <summary>
-        /// True for the edges and corner nodes a resolved build surface is made of.
-        ///
-        /// They are blocks like any other and are counted like any other, but they
-        /// are not drawn: the surface is drawn as the surface, and a corner node's
-        /// own placement ghost is the little ball you drag it by -- which appeared
-        /// scattered around a changed surface saying nothing the surface was not
-        /// already saying.
+        /// True for the edges and corner nodes of a resolved surface. Counted like
+        /// any other block, but not drawn: the surface is drawn as the surface, and
+        /// a node's own ghost is the little ball you drag it by.
         /// </summary>
         public bool PartOfSurface;
 
         /// <summary>
-        /// How far two positions may differ and still count as the same place.
-        ///
-        /// Besiege writes coordinates as decimal text and reads them back through a
-        /// fast float parser, so a block that was never touched can come back a
-        /// hair off. A thousandth of a block is far below anything a player can
-        /// place by hand and far above that noise.
+        /// How far two positions may differ and still be the same place. Besiege
+        /// writes coordinates as decimal text and reads them back through a fast
+        /// float parser, so an untouched block comes back a hair off; a thousandth
+        /// of a block is well under what a player can place and well over that noise.
         /// </summary>
         public const float PositionEpsilon = 0.001f;
 
@@ -174,11 +146,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// A key that is equal exactly when two blocks are interchangeable. Used to
-        /// pair up blocks whose guid changed but which are otherwise identical, so
-        /// it has to quantise the floats that <see cref="Matches"/> compares with a
-        /// tolerance -- two values within epsilon can still land either side of a
-        /// bucket edge, which costs an exact match and falls through to the
+        /// A key equal exactly when two blocks are interchangeable, for pairing up
+        /// blocks whose guid changed but which are otherwise identical. The floats
+        /// are quantised, so two values within epsilon can land either side of a
+        /// bucket edge -- that costs an exact match and falls through to the
         /// nearest-position pass rather than being wrong.
         /// </summary>
         public string IdentityKey()
@@ -216,23 +187,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Decimal places kept when a setting's value goes into
-        /// <see cref="Settings"/>.
-        ///
-        /// Settings are compared as text, so they need the same tolerance the
-        /// transform gets, applied before the comparison rather than during it.
-        /// Some of Besiege's block settings hold live physics values -- a piston's
-        /// start and end positions, say -- and those come back a little different
-        /// every save even when nobody has touched the block: 5.96047E-08 one
-        /// minute and 2.842171E-14 the next, both of them zero to anyone but a
-        /// float. Comparing the text as written reports that block as changed once
-        /// a minute forever.
-        ///
-        /// Four places is finer than any slider in the game moves and coarser than
-        /// anything physics wobbles by.
+        /// Four decimal places, as the scale a value is rounded on before it goes
+        /// into <see cref="Settings"/>. Settings are compared as text, so the
+        /// tolerance has to be applied first: some hold live physics values that
+        /// come back 5.96047E-08 one save and 2.842171E-14 the next, both of them
+        /// zero to anyone but a float. Four places is finer than any slider moves
+        /// and coarser than anything physics wobbles by.
         /// </summary>
-        public const int SettingsDecimals = 4;
-
         private const float SettingsScale = 10000f;
 
         /// <summary>A number as it goes into a settings string: rounded, and the same in any locale.</summary>

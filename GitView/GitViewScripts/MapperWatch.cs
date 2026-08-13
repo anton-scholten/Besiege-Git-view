@@ -7,35 +7,23 @@ namespace GitView
     /// <summary>
     /// Makes Besiege's autosave notice that a block was retuned.
     ///
-    /// Besiege only writes an autosave when it believes the machine has changed,
-    /// and what it counts as a change is narrower than it sounds. The flag behind
-    /// it is <c>MachineAutosaveController.MachineUpdatedSinceLastSave</c>, and the
-    /// only things that set it are the seven places that raise
-    /// <c>ReferenceMaster.onMachineModified</c>: placing a block, deleting one,
-    /// finishing a drag, mirroring, and undoing. Remapping a key, moving a slider
-    /// or flipping a toggle raises nothing, so the sixty-second timer comes round,
-    /// finds the flag clear, and skips the save. The new setting is never written
-    /// to a version at all.
+    /// The autosave only fires when <c>MachineUpdatedSinceLastSave</c> is set, and
+    /// the only things that set it are the seven places raising
+    /// <c>ReferenceMaster.onMachineModified</c>: placing, deleting, dragging,
+    /// mirroring, undoing. Remapping a key or moving a slider raises nothing, so the
+    /// timer comes round, finds the flag clear and skips the save -- and the new
+    /// setting never reaches a version at all.
     ///
-    /// In ordinary play that is invisible: a tuning session nearly always nudges a
-    /// block eventually, and the settings ride along with whatever save that
-    /// triggers. It is very visible in this mod. Change a block's keys, wait for
-    /// the autosave, open the history -- and there is no new version, and nothing
-    /// is orange. The diff is right; the folder simply has nothing in it.
-    ///
-    /// So the block mapper is watched. Its settings are fingerprinted when it
-    /// opens, compared when it closes, and if they differ the game is told the
-    /// machine was modified in exactly the way it is told when a block is dragged.
-    /// Nothing is saved here and no file is touched: the next autosave does the
-    /// work, on its own schedule, and would have done it already if Besiege
-    /// counted this as a change.
+    /// So the mapper is watched: its settings are fingerprinted when it opens,
+    /// compared when it closes, and if they differ the game is told the machine was
+    /// modified exactly as it is told when a block is dragged. Nothing is saved here;
+    /// the next autosave does the work on its own schedule.
     /// </summary>
     public class MapperWatch : MonoBehaviour
     {
         /// <summary>
         /// The holder the mapper was opened on. Kept rather than asked for again on
-        /// close, because <c>BlockMapper.Current</c> is cleared as part of closing
-        /// and the two callbacks have to be comparing the same block.
+        /// close: <c>BlockMapper.Current</c> is cleared as part of closing.
         /// </summary>
         private SaveableDataHolder _holder;
         private string _before = string.Empty;
@@ -53,12 +41,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Subscribes to the mapper's own open and close callbacks.
-        ///
-        /// These are plain static delegates on <c>BlockMapper</c> rather than
-        /// events, so they survive scene loads and have to be unsubscribed by hand.
-        /// This component lives on the mod's DontDestroyOnLoad host, so in practice
-        /// that is once, when the game shuts down.
+        /// Subscribes to the mapper's open and close callbacks. Plain static
+        /// delegates rather than events, so they survive scene loads and have to be
+        /// unsubscribed by hand -- once, when the game shuts down.
         /// </summary>
         private void Hook()
         {
@@ -158,16 +143,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Everything the mapper can change about a block, as one comparable
-        /// string.
+        /// Everything the mapper can change about a block, as one comparable string.
         ///
-        /// Built from the mapper's own <c>MapperType</c> list rather than from the
-        /// block's saved data, because that list is what the widgets write to and
-        /// it is up to date the instant a key is rebound -- there is no save to
-        /// wait for. Each entry is serialised through the same
-        /// <see cref="VersionScan.Describe"/> the diff uses, so a value that the
-        /// diff would round away cannot look like a change here either. A slider
-        /// dragged and put back is not a change.
+        /// Off the mapper's own <c>MapperType</c> list rather than the block's saved
+        /// data: that list is what the widgets write to, so it is current the instant
+        /// a key is rebound. Serialised through the same
+        /// <see cref="VersionScan.Describe"/> the diff uses, so a slider dragged and
+        /// put back is not a change here either.
         /// </summary>
         private static string Fingerprint(SaveableDataHolder holder)
         {
@@ -191,14 +173,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Tells the game the machine was modified.
-        ///
-        /// Raises Besiege's own <c>onMachineModified</c> rather than reaching into
-        /// the autosave controller's flag directly. It is the same call the game
-        /// makes when a block finishes being dragged, so everything else listening
-        /// -- the centre of mass, the aerodynamics display, the block counter --
-        /// gets the same news it would have got, instead of the autosave being told
-        /// something the rest of the game has not heard.
+        /// Tells the game the machine was modified, by raising Besiege's own
+        /// <c>onMachineModified</c> rather than setting the autosave flag directly --
+        /// so the centre of mass, the block counter and everything else listening
+        /// hear the same news the autosave does.
         /// </summary>
         private static void MarkModified()
         {

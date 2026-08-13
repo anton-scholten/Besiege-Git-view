@@ -29,9 +29,10 @@ The sources divide along one line, and it is worth keeping:
 | `MachineSnapshot.cs` a version's blocks | `HistoryView.cs`, `UIF.cs`, `UIBuild.cs` the window |
 | `VersionEntry.cs` names, stamps, counts | `BrowserWatch.cs` the load-screen button |
 | `RowSort.cs` the column ordering | `MapperWatch.cs` the autosave nudge |
-| `DiffPalette.cs` the four colours | `OptionsView.cs` choosing them |
+| `SurfaceShape.cs` a build surface's corners | `OptionsView.cs` choosing the colours |
+| `DiffPalette.cs` the four colours | `Selection.cs`, `SlotMark.cs` picking machines |
 | | `Prefs.cs` what is remembered |
-| | `IconArt.cs`, `GitViewMod.cs` |
+| | `IconArt.cs`, `Relative.cs`, `GitViewMod.cs` |
 
 The left column is where the mod is actually right or wrong, and `run-tests.sh`
 compiles **only** those files. That is deliberate: if the diff ever needs a
@@ -245,31 +246,31 @@ Still not confirmed:
   looks pixelled, the fallback ran: `Player.log` says why, unless the font itself
   was null, which is silent and means UI Factory had not loaded when the icon was
   drawn (that face is then not cached, so the next one should get it).
-- **the compare-them-all button's size.** Keeping the copy's other behaviours to
-  get its plate back cost it the mouse entirely — see the note in MODDING-NOTES.
-  It is stripped to its `SimpleUIButton` again, draws our own plated icon, and
-  `MatchSize` grows the whole button until what it draws is as tall as what a real
-  load button draws. The log line says by how much.
-- **the tooltip.** A quad under the button carrying a picture of the words
-  (`IconArt.Words`) in Besiege's plate grey and teal with an arrow pointing up at
-  the button; the proportions were checked by rendering the layout outside the
-  game. Two attempts at showing it have failed, so this one does not use
-  `SimpleUIButton`'s enter and exit events at all: `ShowTipOnHover` raycasts the
-  button's own collider against the mouse every frame, and the quad is pushed
-  toward whichever camera can see the browser, in case it was inside the panel.
-  **`Player.log` now says what the tooltip became** — texture size, quad position
-  and scale — or why it could not be drawn. Read that first.
+- **the compare-them-all button.** A whole copy of the rightmost load button with
+  only `LoadSaveButton` and the localisation behaviours taken off it, so it keeps
+  the plate, the swell and the tooltip that button already has — see the note in
+  MODDING-NOTES for why stripping it down cost it all three. The plate is not part
+  of the button, so `CopyPlate` copies that too and parents it where the original's
+  is; `KeepPressable` forces the `SimpleUIButton` enabled every frame and watches
+  for the press itself, because something switches that button off when the
+  browser has nothing for it to act on.
+- **the tooltip.** Besiege's own where one can be copied (`CopyTip` re-points the
+  copy at a copy of its `tooltipParent`, which is what `Tooltip.Reset` then binds
+  to), and a quad of ours carrying a picture of the words (`IconArt.Words`) where
+  it cannot. In the second case `ShowTipOnHover` raycasts the button's own collider
+  against the mouse every frame rather than using `SimpleUIButton`'s enter and exit
+  events, which stop arriving the moment anything disables the collider.
 - **where that button lands.** `RightOfRow` walks right from the rightmost
   `LoadSaveButton`, hopping to any active `SimpleUIButton` within two and a half
   widths on the same row, and puts ours one hop past the end. This replaced a
   pitch measured between the two `LoadSaveButton`s, which is not the pitch the
   row is drawn on — "load as selection" is not one of them — and left ours a
-  button and a half out. The log line says the local position it chose.
-- **that a pinned row's number reads as marked.** The number is the pin button;
-  tinting the prefab's own background did nothing in game — see the
-  CustomMaterialHandler note in MODDING-NOTES — so `BuildNumber` puts a plain
-  Image behind the label and colours that, borrowing the button's sprite for its
-  corners where there is one.
+  button and a half out.
+- **that a pinned row's circle reads as marked.** The circle is a picture inside
+  the pin button rather than the button's own face, because tinting that did
+  nothing in game — see the CustomMaterialHandler note in MODDING-NOTES.
+  `BuildPin` switches the prefab's rounded-square face off, puts a disc behind
+  (`IconArt.Disc`) and the ring over it, and `MarkPin` colours the ring.
 - **that the frame around the chosen row clears its rounded corners.**
   `EdgeInset` is 3 against an assumed corner radius of about 5; if the corners
   poke out, raise it rather than thinning the bars.

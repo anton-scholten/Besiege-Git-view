@@ -5,22 +5,15 @@ namespace GitView
     /// <summary>
     /// The four colours a diff is drawn in, and the one place they are kept.
     ///
-    /// One colour per category rather than two, even though it is used for two
-    /// different things -- the counts in the list and the shells over the machine.
-    /// Two would be two things to keep in step and one more way for the window to
-    /// disagree with the world it is describing. The alpha is what differs: a shell
-    /// is translucent because several of them overlap on a dense machine, while
-    /// text at less than full opacity is simply harder to read for no gain. So the
-    /// player picks one colour with an opacity, the shell honours the opacity and
-    /// the text ignores it.
+    /// One colour per category for both the things it is used for -- the counts in
+    /// the list and the shells over the machine -- so the window cannot disagree
+    /// with the world it describes. Only the alpha differs: shells overlap on a
+    /// dense machine and want to be translucent, text at less than full opacity is
+    /// just harder to read. So the shell honours the opacity and the text ignores it.
     ///
-    /// Remembered between sessions through <see cref="Prefs"/>, and read back the
-    /// first time anything asks for a colour rather than at load: the mod is loaded
-    /// when the player first enters a level, and there is no sense reading
-    /// preferences for a window that may never be opened.
-    ///
-    /// Categories are ints rather than an enum because Besiege's in-game compiler
-    /// segfaults on an enum declaration. See docs/MODDING-NOTES.md.
+    /// Read back from <see cref="Prefs"/> the first time anything asks, rather than
+    /// at load: the window may never be opened. Categories are ints rather than an
+    /// enum because Besiege's compiler segfaults on one -- see docs/MODDING-NOTES.md.
     /// </summary>
     public static class DiffPalette
     {
@@ -29,28 +22,20 @@ namespace GitView
         public const int Removed = 2;
 
         /// <summary>
-        /// Everything the save left alone -- neither added, changed nor removed.
-        /// The one category with no count of its own in the list, because it is not
-        /// something a save did; it is what a save did not do.
+        /// Everything the save left alone. The one category with no count of its
+        /// own, because it is what a save did not do.
         /// </summary>
         public const int Unchanged = 3;
         public const int Categories = 4;
 
         /// <summary>
-        /// The colours as they start out: a plain green, yellow and red at the
-        /// opacity a shell reads well at against the sky and against a machine, and
-        /// a cyan at no opacity at all.
+        /// Flat primaries rather than Besiege's muted interface palette, because
+        /// most of their work is done as translucent shells over a brown machine in
+        /// a blue-green landscape, where a soft colour disappears.
         ///
-        /// Flat primaries rather than the muted palette Besiege writes its own
-        /// interface in, because these are not interface: two thirds of their work
-        /// is done as translucent shells over a brown machine in a blue-green
-        /// landscape, where a soft colour disappears.
-        ///
-        /// Unchanged starts invisible on purpose. It is the one category that can
-        /// be most of the machine, so having it on by default would bury the three
-        /// that answer the question; it is there for the player who wants to see
-        /// what a change is attached to. At zero opacity it costs nothing at all --
-        /// see <see cref="Faded"/>.
+        /// Unchanged starts invisible on purpose: it can be most of the machine, so
+        /// on by default it would bury the three that answer the question. At zero
+        /// opacity it costs nothing -- see <see cref="Faded"/>.
         /// </summary>
         private static readonly Color[] Fallbacks =
         {
@@ -76,8 +61,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// The same colour for text, which is always fully opaque -- see the class
-        /// note. A count at 38% over a dark panel is not a count anybody can read.
+        /// The same colour for text, always fully opaque: a count at 38% over a dark
+        /// panel is not a count anybody can read.
         /// </summary>
         public static Color Ink(int category)
         {
@@ -87,10 +72,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// True when this category is turned off rather than merely faint. Asked by
-        /// the overlay, which does not spawn shells it cannot show: unchanged blocks
-        /// are most of a machine, and hundreds of invisible ones is a hitch every
-        /// time a version is clicked in exchange for nothing on screen.
+        /// True when this category is off rather than merely faint. The overlay does
+        /// not spawn shells it cannot show: hundreds of invisible unchanged blocks
+        /// is a hitch on every click in exchange for nothing on screen.
         /// </summary>
         public static bool Faded(int category)
         {
@@ -105,18 +89,15 @@ namespace GitView
                 return;
             }
             Current[category] = colour;
-            // Stored as it is chosen rather than when the picker is put away: a
-            // slider is dragged, and there is no moment afterwards that reliably
-            // means "done". Reaching the disk is Prefs.Flush's job, and that is
+            // Stored as it is chosen: a slider is dragged, and there is no later
+            // moment that reliably means "done". Reaching the disk is Prefs.Flush,
             // called when the picker closes.
             Prefs.SetColour(category, colour);
         }
 
         /// <summary>
-        /// Reads the stored colours once. Anything never chosen keeps its default,
-        /// which is what <see cref="Prefs.Colour"/> falls back to key by key -- so a
-        /// player who changed only the green keeps the new defaults for the other
-        /// two rather than whatever they were when they last played.
+        /// Reads the stored colours once, key by key, so a player who changed only
+        /// the green keeps the current defaults for the other three.
         /// </summary>
         private static void Load()
         {
@@ -137,17 +118,14 @@ namespace GitView
             return Valid(category) ? Fallbacks[category] : Color.white;
         }
 
-        // How much larger than the block a shell over it is drawn, and how far the
-        // player may take that. A shell is a coat of paint: at 1 it is exactly the
-        // block, sharing its surface and fighting it for pixels, and much past a
-        // tenth larger it stops looking like the block underneath and starts hiding
-        // its neighbours.
+        // How much larger than the block a shell is drawn. At 1 it shares the
+        // block's surface and fights it for pixels; much past a tenth larger it
+        // starts hiding the block's neighbours.
         //
-        // Two ranges, because they are two questions. The slider covers the sizes
-        // worth dragging through -- a shade under the block to a third over it, which
-        // is where the answer is on any ordinary machine -- and what may be *typed*
-        // is wider than that, for the machine that is not ordinary: half size to see
-        // a shell inside a block it is buried in, double to find one at all.
+        // Two ranges, because they are two questions: the slider covers what is
+        // worth dragging through on an ordinary machine, and what may be typed is
+        // wider -- half size to see a shell buried inside a block, double to find
+        // one at all.
         public const float ShellLeast = 0.5f;
         public const float ShellMost = 2f;
         public const float ShellSlideLeast = 0.9f;
@@ -156,9 +134,8 @@ namespace GitView
         private static float _shell = -1f;
 
         /// <summary>
-        /// How much larger than its block each shell is drawn. Applied about each
-        /// shell's own middle, so that a block ends up inside its mark rather than
-        /// sliding out of one corner of it.
+        /// How much larger than its block each shell is drawn, applied about the
+        /// shell's own middle so the block ends up inside its mark.
         /// </summary>
         public static float Shell
         {

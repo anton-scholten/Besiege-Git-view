@@ -136,8 +136,8 @@ looked for a `MeshFilter` with a mesh on it and found none at all — on every
 slot, every time. Whatever builds a slot button's visuals runs in an `Awake` or a
 `Start` of its own, so the clone is bare in the frame `Instantiate` returns it
 and furnished a frame or two later. Anything that repaints one has to be retried
-across frames, and the log line that says "nothing to draw on" is what a
-too-early look produces, not a button that draws nothing.
+across frames — a copy with nothing on it to draw is what a too-early look
+produces, not a button that draws nothing.
 
 **A slot button's face is a `SpriteRenderer`.** That is the answer, arrived at by
 logging the kind of every renderer on the clone. So the thing to set is

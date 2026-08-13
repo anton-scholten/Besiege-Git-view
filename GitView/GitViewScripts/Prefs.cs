@@ -4,32 +4,21 @@ using UnityEngine;
 namespace GitView
 {
     /// <summary>
-    /// The handful of things the mod remembers between sessions: where the window
-    /// was left, and what colour each of the four categories is.
+    /// The handful of things the mod remembers between sessions: where the windows
+    /// were left, the four colours, and the shell size.
     ///
-    /// Kept where Besiege's own modding API says to keep it.
+    /// Kept where Besiege's modding API says to keep it.
     /// <c>Modding.Configuration.GetData()</c> hands back an <c>XDataHolder</c>
-    /// belonging to this mod and nobody else -- it works out which mod is asking
-    /// from the calling assembly, and throws if that assembly is not one the
-    /// manifest lists. The loader reads it back in as the mod is loaded
-    /// (<c>ModdingInitializer.LoadMod</c>) and writes every mod's holder out on a
-    /// clean quit (<c>ModManager.OnApplicationQuit</c>), so the round trip is the
-    /// game's to manage rather than ours.
+    /// belonging to this mod alone; the loader reads it in with the mod and writes
+    /// it out on a clean quit, so the round trip is the game's to manage. It lands
+    /// in <c>Besiege_Data/Mods/Config/GitView_&lt;id&gt;.xml</c>, the same file the
+    /// loader already keeps the <c>toggle-history</c> binding in. (PlayerPrefs would
+    /// work too, but it is Unity's store, not Besiege's, and uninstalling the mod
+    /// would leave its settings in the game's own options file.)
     ///
-    /// It lands in <c>Besiege_Data/Mods/Config/GitView_&lt;id&gt;.xml</c>, next to
-    /// every other mod's, and this mod already has one: the loader keeps the
-    /// <c>toggle-history</c> key binding in it. Sharing the file that already
-    /// exists for this mod's settings is the whole point.
-    ///
-    /// (PlayerPrefs would also work and is not blacklisted, but it is Unity's
-    /// store, not Besiege's -- it puts a mod's settings in the game's own options
-    /// file, where nothing manages them and uninstalling the mod leaves them
-    /// behind.)
-    ///
-    /// Writes go into the holder immediately and cost nothing.
-    /// <see cref="Flush"/> is what reaches the disk, so it is called when something
-    /// is finished with rather than on every frame a slider moves; the quit-time
-    /// save means a missed call costs only what a crash would have cost anyway.
+    /// Writes go into the holder immediately and cost nothing. <see cref="Flush"/>
+    /// is what reaches the disk, so it is called when something is finished with
+    /// rather than every frame a slider moves.
     /// </summary>
     public static class Prefs
     {
@@ -45,26 +34,16 @@ namespace GitView
         };
 
         /// <summary>
-        /// Where a colour's opacity is kept, which is not with the colour.
-        ///
-        /// <c>XDataHolder</c>'s Color has three channels. Writing one produces
-        ///   &lt;Color key="added"&gt;&lt;R&gt;0&lt;/R&gt;&lt;G&gt;1&lt;/G&gt;&lt;B&gt;0&lt;/B&gt;&lt;/Color&gt;
-        /// with no alpha anywhere in it, so an opacity written that way is not
-        /// stored and comes back as whatever <c>ReadColor</c> defaults to. That is
-        /// the whole of the "the opacity does not survive a restart" bug: the other
-        /// three channels always did.
-        ///
-        /// So the opacity goes beside it as a Single, which is the type every block
-        /// setting in every .bsg is written with and the one thing about XDataHolder
-        /// that needs no assuming.
+        /// Where a colour's opacity is kept, which is not with the colour:
+        /// <c>XDataHolder</c>'s Color writes R, G and B and no alpha at all, so an
+        /// opacity stored that way does not survive a restart. It goes beside it as
+        /// a Single, the type every block setting in every .bsg uses.
         /// </summary>
         private const string OpacitySuffix = "-opacity";
 
         /// <summary>
         /// This mod's configuration, or null if the API refuses -- which it does by
-        /// throwing, and only for an assembly the manifest does not list. Worth
-        /// catching rather than trusting: a mod that cannot store a preference
-        /// should still run.
+        /// throwing. A mod that cannot store a preference should still run.
         /// </summary>
         private static XDataHolder Data()
         {
@@ -82,10 +61,8 @@ namespace GitView
         // -------------------------------------------------------------- the window
 
         /// <summary>
-        /// Where the window was left, or <paramref name="fallback"/> if it never
-        /// was. Two Singles rather than one Vector3, for the same reason the opacity
-        /// is one: a type whose round trip can be read straight out of any .bsg is
-        /// worth more here than a tidier key.
+        /// Where the window was left, or <paramref name="fallback"/> if it never was.
+        /// Two Singles rather than a Vector3, for the same reason the opacity is one.
         /// </summary>
         public static Vector2 Window(Vector2 fallback)
         {
@@ -187,9 +164,8 @@ namespace GitView
         // ------------------------------------------------------------------ writing
 
         /// <summary>
-        /// Puts a value in the holder under its key. <c>XDataHolder.Write</c> takes
-        /// an object and picks the XData type off it, so a Color and a Vector3 both
-        /// go in whole rather than as four floats each.
+        /// Puts a value in the holder under its key. <c>XDataHolder.Write</c> picks
+        /// the XData type off the object, so a Color goes in whole.
         /// </summary>
         private static void Write(string key, object value)
         {

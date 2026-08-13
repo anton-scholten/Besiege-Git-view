@@ -1,51 +1,44 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 
 namespace GitView
 {
     /// <summary>
-    /// Draws a diff over the machine in the build area: what the version added in
-    /// green, what it moved or retuned in orange, and what it deleted in red, the
-    /// deleted blocks standing where they used to be. What it left alone has a
-    /// colour too, though that one starts turned off.
+    /// Draws a diff over the machine in the build area: added in green, moved or
+    /// retuned in orange, deleted in red and standing where it used to be. What the
+    /// save left alone has a colour too, turned off by default.
     ///
-    /// Nothing here touches the machine. The green and orange marks are hollow
-    /// shells spawned a few percent larger than the block they sit on, rather than
-    /// a tint applied to the block's own renderers -- Besiege's blocks share their
-    /// materials, so tinting one girder tints every girder, and putting the
-    /// original back afterwards means being right about what it was. A shell is
-    /// removed by deleting it.
+    /// Nothing here touches the machine. Each mark is a hollow shell a few per cent
+    /// larger than the block it sits on rather than a tint on the block's own
+    /// renderers: Besiege's blocks share their materials, so tinting one girder
+    /// tints every girder, and putting the original back means being right about
+    /// what it was. A shell is removed by deleting it.
     ///
-    /// The shells are Besiege's own placement ghosts, the translucent preview it
-    /// shows while you drag a block out of the menu. Every block type has one and
-    /// it is already the right shape -- but it is not inert, and
-    /// <see cref="Sterilise"/> is what makes it so.
+    /// The shells are Besiege's own placement ghosts, which are already the right
+    /// shape for the block -- but they are not inert, and <see cref="Sterilise"/> is
+    /// what makes them so.
     /// </summary>
     public class GhostView
     {
         /// <summary>
-        /// How thick the tube drawn along a brace, a hose or a rope is. A little
-        /// fatter than any of them, for the same reason the other shells are a
-        /// little larger than their blocks: it has to be visible over the thing it
-        /// is marking rather than inside it.
+        /// How thick the tube along a brace, a hose or a rope is: a little fatter
+        /// than any of them, so it is drawn over what it marks and not inside it.
         /// </summary>
         private const float SpanWidth = 0.16f;
 
         /// <summary>
-        /// Below this there is nothing to draw between the two ends. Braces are
-        /// dragged, so a brace that was placed and never dragged has both ends in
-        /// the same place, and a zero-length cylinder is a disc of noise.
+        /// Below this there is nothing to draw between the two ends: a brace placed
+        /// and never dragged has both in the same place.
         /// </summary>
         private const float ShortestSpan = 0.05f;
 
         private const string ContainerName = "GitView Diff Overlay";
 
         /// <summary>
-        /// Shaders to draw a shell with, best first. Only shaders included in the
-        /// player's build can be found by name, so this tries several and falls
-        /// back to tinting the ghost's own material if none of them are there.
+        /// Shaders to draw a shell with, best first. Only shaders in the player's
+        /// build can be found by name, so several are tried before falling back to
+        /// tinting the ghost's own material.
         /// </summary>
         private static readonly string[] ShaderCandidates =
         {
@@ -59,20 +52,16 @@ namespace GitView
         private GameObject _container;
 
         /// <summary>
-        /// One material per category, shared by every shell in it.
-        ///
-        /// Shared on purpose rather than one per colour: the player can drag a
-        /// colour slider, and every shell of that category has to follow while the
-        /// slider is moving. One material means that is a single assignment however
-        /// many blocks are on screen, instead of hundreds of repaints a frame and a
-        /// new material for every colour dragged through.
+        /// One material per category, shared by every shell in it: a dragged colour
+        /// slider is then one assignment however many blocks are on screen, instead
+        /// of hundreds of repaints a frame.
         /// </summary>
         private readonly Material[] _paint = new Material[DiffPalette.Categories];
 
         /// <summary>
-        /// The shells of each category, kept only for the fallback path: where no
-        /// translucent shader could be found the colour lives in a property block
-        /// per renderer, and changing it means going round them again.
+        /// The shells of each category. Needed for the fallback path, where no
+        /// translucent shader was found and the colour lives in a property block per
+        /// renderer, and for taking one category down on its own.
         /// </summary>
         private readonly List<GameObject>[] _shells = new List<GameObject>[DiffPalette.Categories];
 
@@ -86,12 +75,10 @@ namespace GitView
         private bool _shaderSearched;
 
         /// <summary>
-        /// The diff on show, kept so it can be drawn again.
-        ///
-        /// The shells are parented into the machine, and a level change destroys
-        /// the machine -- so an overlay can disappear without anybody asking it to.
-        /// This is what tells that apart from having been cleared, and what makes
-        /// putting it back possible.
+        /// The diff on show, kept so it can be drawn again. The shells are parented
+        /// into the machine and a level change destroys the machine, so an overlay
+        /// can disappear without anybody asking it to; this tells that apart from
+        /// having been cleared.
         /// </summary>
         private DiffResult _showing;
 
@@ -130,11 +117,10 @@ namespace GitView
                 return;
             }
 
-            // Which layer the machine's own blocks are drawn on. A GameObject built
-            // from nothing -- the tube along a brace, the slab over a build surface
-            // -- starts on the default layer, which the build area's camera need not
-            // be drawing at all; the ghosts do not have the problem because they
-            // arrive on whatever layer Besiege authored them for.
+            // Which layer the machine's blocks are drawn on. Anything built from
+            // nothing -- the tube along a brace, the slab over a surface -- starts on
+            // the default layer, which the build camera need not be drawing at all.
+            // Ghosts arrive on whatever layer Besiege authored them for.
             _drawLayer = LayerOfBlocks(root);
 
             _container = new GameObject(ContainerName);
@@ -148,35 +134,11 @@ namespace GitView
 
             int drawn = 0;
             int asked = 0;
-            int surfaces = 0;
-            _surfaces = 0;
-            _copied = 0;
-            _guessed = 0;
-            _borrowed = 0;
-            _missed.Clear();
             for (int category = 0; category < DiffPalette.Categories; category++)
             {
                 List<BlockRecord> blocks = Blocks(diff, category);
                 drawn += Draw(blocks, category);
                 asked += DiffPalette.Faded(category) ? 0 : blocks.Count;
-                surfaces += Surfaces(blocks);
-            }
-            if (surfaces > 0 || _surfaces > 0)
-            {
-                Log.Info("the diff holds " + surfaces + " build surface(s), of which " +
-                         _surfaces + " knew their own corners.");
-            }
-            // Which of the two ways each block was drawn. A block marked at the wrong
-            // size is a block that could not be copied and was drawn from its
-            // placement ghost instead, and this is what says which of those it was.
-            Log.Info("drew " + _copied + " block(s) from the machine's own meshes, " +
-                     _guessed + " from placement ghosts, " + _borrowed +
-                     " borrowed off another block of the same type.");
-            if (_missed.Count > 0)
-            {
-                Log.Warn("only a plain box could be drawn for " + Unshown() +
-                         ": those block types have no mesh in the machine and no " +
-                         "placement ghost.");
             }
 
             // Counted against what was asked for rather than against the diff: a
@@ -193,9 +155,8 @@ namespace GitView
         private int _drawLayer;
 
         /// <summary>
-        /// The layer a machine's blocks are drawn on, taken off the first thing under
-        /// it that draws. Falls back to the root's own layer, which is right when the
-        /// root is a block rather than an empty parent.
+        /// The layer a machine's blocks are drawn on, off the first thing under it
+        /// that draws. Falls back to the root's own layer.
         /// </summary>
         private static int LayerOfBlocks(Transform root)
         {
@@ -211,25 +172,6 @@ namespace GitView
             {
                 parts[i].gameObject.layer = _drawLayer;
             }
-        }
-
-        /// <summary>
-        /// How many of these blocks are build surfaces, resolved or not: a surface
-        /// that could not be followed to its corners is the one thing here that looks
-        /// like nothing at all, so it is worth being able to tell the two apart in
-        /// the log.
-        /// </summary>
-        private static int Surfaces(List<BlockRecord> blocks)
-        {
-            int found = 0;
-            for (int i = 0; i < blocks.Count; i++)
-            {
-                if (blocks[i] != null && blocks[i].EdgeIds != null)
-                {
-                    found++;
-                }
-            }
-            return found;
         }
 
         /// <summary>The blocks of one category. The overlay's four are the diff's three and what it left alone.</summary>
@@ -302,12 +244,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Picks the overlay up on a colour the player has just changed.
-        ///
-        /// Cheap enough to call from a slider that is being dragged, which is the
-        /// point: the shells recolour under the pointer rather than after it. Where
-        /// a shared material is doing the work that is one assignment; only the
-        /// no-shader fallback has to walk the shells.
+        /// Picks the overlay up on a colour the player has just changed. Cheap enough
+        /// to call from a slider being dragged, which is the point: one assignment
+        /// where a shared material is doing the work, and only the no-shader fallback
+        /// has to walk the shells.
         /// </summary>
         public void Refresh()
         {
@@ -315,8 +255,7 @@ namespace GitView
             {
                 // A category dragged to nothing has no shells to recolour, and one
                 // dragged off nothing has none yet. Crossing that line is the only
-                // thing a colour change can do that a repaint cannot answer, and it
-                // costs one category's shells rather than the whole overlay.
+                // thing a repaint cannot answer.
                 if (_faded[category] != DiffPalette.Faded(category))
                 {
                     Redraw(category);
@@ -345,13 +284,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Shows or hides the overlay. Idempotent, because the window asks every
-        /// frame whether the game has a menu up and this is the answer it acts on.
+        /// Shows or hides the overlay. Idempotent: the window asks every frame
+        /// whether the game has a menu up, and this is what it acts on.
         /// </summary>
         public void SetVisible(bool visible)
         {
-            // Remembered as well as applied, so an overlay redrawn while a menu is
-            // up does not come back on top of it.
+            // Remembered as well as applied, so an overlay redrawn while a menu is up
+            // does not come back on top of it.
             _hidden = !visible;
             if (_container != null && _container.activeSelf != visible)
             {
@@ -369,9 +308,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Throws one category's shells away and spawns them again at the colour it
-        /// is now. Only needed when a category has been turned on or off; a colour
-        /// that merely changed is a material assignment.
+        /// Throws one category's shells away and spawns them again. Only needed when
+        /// a category has been turned on or off; a colour that merely changed is a
+        /// material assignment.
         /// </summary>
         private void Redraw(int category)
         {
@@ -385,8 +324,8 @@ namespace GitView
                         continue;
                     }
                     // A shell of this category may be one of the loose ones, and its
-                    // pivot may be the shell itself: both lists have to let go of it
-                    // before it is destroyed, or the next rescale walks a corpse.
+                    // pivot may be the shell itself: both lists have to let go before
+                    // it is destroyed, or the next rescale walks a corpse.
                     _loose.Remove(shells[i]);
                     _pivots.Remove(shells[i].transform);
                     if (shells[i].transform.parent != null)
@@ -408,9 +347,9 @@ namespace GitView
 
         private int Draw(List<BlockRecord> blocks, int category)
         {
-            // Recorded whether anything is drawn or not: it is what Refresh compares
-            // against, and a category that drew nothing because it is switched off
-            // has to be told apart from one that drew nothing because it is empty.
+            // Recorded whether anything is drawn or not: Refresh compares against it,
+            // and a category that drew nothing because it is off has to be told apart
+            // from one that drew nothing because it is empty.
             _faded[category] = DiffPalette.Faded(category);
             if (_faded[category])
             {
@@ -428,33 +367,6 @@ namespace GitView
             return drawn;
         }
 
-        private int Missed(int kind)
-        {
-            int had;
-            return _missed.TryGetValue(kind, out had) ? had : 0;
-        }
-
-        /// <summary>
-        /// How many blocks of each type the last diff could mark only with a box --
-        /// which is to say the ones nothing else here could draw.
-        /// </summary>
-        private readonly Dictionary<int, int> _missed = new Dictionary<int, int>();
-
-        /// <summary>Those block types, as text for the log.</summary>
-        private string Unshown()
-        {
-            StringBuilder said = new StringBuilder();
-            foreach (KeyValuePair<int, int> kind in _missed)
-            {
-                if (said.Length > 0)
-                {
-                    said.Append(", ");
-                }
-                said.Append(kind.Value).Append(" of type ").Append(kind.Key);
-            }
-            return said.ToString();
-        }
-
         private bool Draw(BlockRecord block, int category)
         {
             bool drawn = false;
@@ -468,24 +380,16 @@ namespace GitView
                 return false;
             }
 
-            // A build surface is the one block a ghost cannot answer for at all: its
-            // own ghost is a mark at one of its corners, and where the other three
-            // are is a question about eight other blocks. That one is copied off the
-            // machine -- see CopyOfLive -- and everything else is drawn from its
-            // placement ghost, which is the block at the size the game draws it.
-            //
-            // Copying every block was tried and taken back out: a copy hangs off the
-            // block's own renderer and ought to be exact, and on a wheel and on a
-            // cannon it came out worse than the ghost it replaced. What is left is
-            // the case where the ghost has nothing to draw.
-            Bounds covered;
+            // A build surface is the one block a ghost cannot answer for: its own
+            // ghost is a mark at one corner, and where the other three are is a
+            // question about eight other blocks. So that one is copied off the machine
+            // -- see CopyOfLive -- and everything else is drawn from its placement
+            // ghost. Copying every block was tried and came out worse on wheels and
+            // cannons; what is left is the case where the ghost has nothing to draw.
             if (block.HasSurface)
             {
-                if (category != DiffPalette.Removed &&
-                    CopyOfLive(block.Id, category, out covered))
+                if (category != DiffPalette.Removed && CopyOfLive(block.Id, category))
                 {
-                    _surfaces++;
-                    _copied++;
                     return true;
                 }
                 if (DrawSurface(block, category))
@@ -494,17 +398,14 @@ namespace GitView
                 }
             }
 
-            _guessed++;
             GameObject ghost = Spawn(block);
             if (ghost != null)
             {
                 // What the prefab was built at, before anything of ours touches it.
                 Vector3 authored = ghost.transform.localScale;
-                // A ghost that draws nothing is worse than no ghost: it is counted,
-                // it is painted, it is parented into the overlay, and the player is
-                // looking at a block the list says changed with nothing on it. Some
-                // block types have a ghost prefab with no geometry on it at all --
-                // the drag panel is one.
+                // A ghost that draws nothing is worse than no ghost: it counts as
+                // drawn, and the player is left looking at a block the list says
+                // changed with nothing on it. The drag panel's is one of those.
                 if (!Drawable(ghost))
                 {
                     UnityEngine.Object.Destroy(ghost);
@@ -514,14 +415,10 @@ namespace GitView
                     ghost.transform.localPosition = block.Position;
                     ghost.transform.localRotation = block.Rotation;
                     // Multiplied by the size the ghost was authored at rather than
-                    // replacing it. A ghost prefab need not be built at full size --
-                    // a cannon's is not -- so writing the block's own scale over it
-                    // threw away the prefab's and drew the mark half again too big.
-                    // What is wanted is the prefab's size *and* whatever the player
-                    // scaled the block to.
-                    //
-                    // No swelling here either: every shell is grown by its own pivot,
-                    // by however much the player has asked for. See OnPivot.
+                    // replacing it: a ghost prefab need not be built at full size -- a
+                    // cannon's is not -- and what is wanted is the prefab's size *and*
+                    // whatever the player scaled the block to. No swelling here
+                    // either; every shell is grown by its own pivot. See OnPivot.
                     ghost.transform.localScale =
                         Vector3.Scale(authored, block.Scale);
                     Adopt(ghost, category);
@@ -534,16 +431,9 @@ namespace GitView
                 // thing to copy where it is still in the machine -- it is this block,
                 // in this place, at this size -- and another block of the same type
                 // is the answer for one the version deleted.
-                drawn = category != DiffPalette.Removed &&
-                        CopyOfLive(block.Id, category, out covered);
-                if (drawn)
-                {
-                    _copied++;
-                }
-                else
-                {
-                    drawn = StandIn(block, category);
-                }
+                drawn = (category != DiffPalette.Removed &&
+                         CopyOfLive(block.Id, category)) ||
+                        StandIn(block, category);
             }
 
             // A brace, a fuel line or a winch is not where its ghost is; it is
@@ -556,9 +446,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Whether an object has any geometry on it worth drawing: a mesh with
-        /// vertices in it, anywhere in the hierarchy. Asked of things that are
-        /// switched off, since a ghost is spawned inactive.
+        /// Whether an object has any geometry worth drawing: a mesh with vertices in
+        /// it, anywhere in the hierarchy. Asked of inactive objects, since a ghost is
+        /// spawned switched off.
         /// </summary>
         private static bool Drawable(GameObject of)
         {
@@ -588,12 +478,10 @@ namespace GitView
         /// Draws a block by borrowing the look of another block of the same type
         /// standing in the machine.
         ///
-        /// For the types with no placement ghost worth spawning. There is no prefab
-        /// to ask and, for a block the version deleted, nothing of its own left in
-        /// the machine -- but a machine that had two drag panels changed usually has
-        /// a third one still on it, and one drag panel looks like another. The copy
-        /// is placed where the record says the block was, at the record's own size,
-        /// so what is borrowed is the shape and nothing else.
+        /// For the types with no ghost worth spawning, where the block itself is gone
+        /// too: a machine that had two drag panels deleted usually has a third still
+        /// on it, and one drag panel looks like another. Placed where the record says,
+        /// at the record's own size, so what is borrowed is the shape and nothing else.
         /// </summary>
         private bool StandIn(BlockRecord block, int category)
         {
@@ -629,8 +517,8 @@ namespace GitView
                     root.InverseTransformPoint(drawn[i].transform.position);
                 piece.transform.localRotation =
                     Quaternion.Inverse(root.rotation) * drawn[i].transform.rotation;
-                piece.transform.localScale = Ratio(drawn[i].transform.lossyScale,
-                                                   root.lossyScale);
+                piece.transform.localScale = Relative.Scale(
+                    drawn[i].transform.lossyScale, root.lossyScale);
                 made++;
             }
             if (made == 0)
@@ -641,16 +529,7 @@ namespace GitView
 
             OnMachineLayer(holder);
             Adopt(holder, category);
-            _borrowed++;
             return true;
-        }
-
-        /// <summary>One scale as a fraction of another, per axis.</summary>
-        private static Vector3 Ratio(Vector3 want, Vector3 by)
-        {
-            return new Vector3(Mathf.Abs(by.x) < 0.0001f ? 1f : want.x / by.x,
-                               Mathf.Abs(by.y) < 0.0001f ? 1f : want.y / by.y,
-                               Mathf.Abs(by.z) < 0.0001f ? 1f : want.z / by.z);
         }
 
         /// <summary>
@@ -664,17 +543,11 @@ namespace GitView
             return _kinds != null && _kinds.TryGetValue(kind, out found) ? found : null;
         }
 
-        /// <summary>How many blocks the last diff drew by borrowing another's look.</summary>
-        private int _borrowed;
-
         /// <summary>
-        /// A plain box where the block is, for a block nothing else could draw.
-        ///
-        /// The last resort, and worth having: a block in the diff with no mark on the
-        /// machine is the mod saying "two blocks changed" and then pointing at
-        /// nothing, which is worse than a mark of the wrong shape. It happens to
-        /// block types with no placement ghost and nothing in the machine to copy --
-        /// the game has a few, and mods can add more.
+        /// A plain box where the block is, for a block nothing else could draw. The
+        /// last resort, and worth having: a block in the diff with no mark on the
+        /// machine is the mod saying "two blocks changed" and pointing at nothing,
+        /// which is worse than a mark of the wrong shape.
         /// </summary>
         private bool DrawBox(BlockRecord block, int category)
         {
@@ -689,10 +562,6 @@ namespace GitView
             box.transform.localScale = Vector3.Scale(block.Scale,
                                                      Vector3.one * BoxSide);
             Adopt(box, category);
-            // Worth a line in the log: a block marked by a box is a block type this
-            // mod has no better answer for, and which one it is cannot be guessed
-            // from a screenshot.
-            _missed[block.Kind] = Missed(block.Kind) + 1;
             return true;
         }
 
@@ -703,28 +572,18 @@ namespace GitView
         private const float BoxSide = 0.7f;
 
         /// <summary>
-        /// Draws a build surface as the surface: a slab through its corners, a little
-        /// larger than the one it marks.
+        /// Draws a deleted build surface as a slab through the corners the file names
+        /// -- see <see cref="BlockRecord.Corners"/> -- since there is nothing left in
+        /// the machine to copy. Nothing Besiege can be asked for: the ghost for a
+        /// surface is a mark at its own position, which is one of its corners, and
+        /// the corners and edges have no ghost at all.
         ///
-        /// Nothing Besiege can be asked for. A surface is nine blocks -- the surface,
-        /// four edges, four corner nodes -- and the ghost spawned for the surface
-        /// block itself is a mark at its own position, which is one of the corners:
-        /// a changed surface came out as one coloured corner with the rest of it
-        /// still the colour of the machine. The corners and the edges have no
-        /// placement ghost at all, being blocks nobody drags out of the menu.
-        ///
-        /// So the shape is built here, out of the corners the file names -- see
-        /// <see cref="BlockRecord.Corners"/>. Marks on the corners were drawn as well
-        /// for a while and are not any more: the whole surface says everything they
-        /// said, and it says it over the thing that changed rather than at its edges.
-        ///
-        /// False if the shape could not be built, and then the caller falls back to
-        /// the block's own ghost: a mark at one corner is a poor way to show a
-        /// surface, and it is a great deal better than showing nothing.
+        /// False if the shape could not be built, and the caller then falls back to
+        /// that ghost: one coloured corner is a poor way to show a surface and a good
+        /// deal better than nothing.
         /// </summary>
         private bool DrawSurface(BlockRecord block, int category)
         {
-            _surfaces++;
             GameObject sheet = Sheet(block.Corners, block.Thickness);
             if (sheet == null)
             {
@@ -735,26 +594,23 @@ namespace GitView
         }
 
         /// <summary>
-        /// A copy of what the machine is drawing for this block, or null if the block
-        /// is not in the machine -- which is the case for anything the version on
-        /// screen removed.
+        /// A copy of what the machine is drawing for this block, or false if the
+        /// block is not in the machine -- which is the case for anything the version
+        /// on screen removed.
         ///
-        /// For the blocks whose shape is not in their prefab. A build surface's
-        /// outline is four other blocks and its edges are curves; a brace, a spring,
-        /// a rope or a hose is stretched between two points its ghost knows nothing
-        /// about. Both were being approximated -- a flat slab through the corners, a
-        /// tube along the span -- and the machine standing in front of the player has
-        /// the real thing on it, generated by the game from the same data.
+        /// For the blocks whose shape is not in their prefab: a build surface, whose
+        /// outline is four other blocks and whose edges are curves, and the few types
+        /// with no usable ghost. The machine in front of the player has the real
+        /// thing on it, generated by the game from the same data.
         ///
-        /// The meshes are copied, not the block. Instantiating a live block runs its
+        /// The meshes are copied, not the block: instantiating a live block runs its
         /// Awake, and a <c>BuildSurface</c> waking up registers itself with the
-        /// machine it finds itself in: the copy would be a real surface, in the real
-        /// machine, in the next save. A GameObject with a MeshFilter and a
-        /// MeshRenderer on it has no behaviour to run and cannot join anything.
+        /// machine it finds itself in -- the copy would be a real surface in the real
+        /// machine in the next save. A MeshFilter and a MeshRenderer cannot join
+        /// anything.
         /// </summary>
-        private bool CopyOfLive(string id, int category, out Bounds covered)
+        private bool CopyOfLive(string id, int category)
         {
-            covered = new Bounds();
             GameObject real = LiveBlock(id);
             if (real == null || _container == null)
             {
@@ -772,20 +628,14 @@ namespace GitView
                 }
 
                 // Hung off the very transform that is drawing it, which is the only
-                // way to be exactly where it is. Copying a transform by taking its
-                // position, rotation and scale is exact only while nothing above it
-                // is scaled unevenly, and Besiege's blocks are scaled unevenly all
-                // the time -- a wheel dragged out to one and a half by one by seven
-                // tenths, with its rim on a rotated child of it, cannot be described
-                // by any position-rotation-scale triple, and the copy came out the
-                // wrong shape. Baking the matrix into the vertices instead is not an
-                // option either: block meshes are not readable, and asking for their
-                // vertices fills the console with "not allowed to access vertices"
-                // and hands back nothing.
+                // way to be exactly where it is: a position-rotation-scale triple
+                // cannot describe a rotated child of an unevenly scaled parent, which
+                // Besiege's blocks are full of, and baking the matrix into the
+                // vertices is not an option either -- block meshes are not readable.
                 //
-                // The pivot sits at the middle of the mesh so that the shell grows
-                // about the block rather than off one end of it, and the piece is
-                // offset back by the same amount so the mesh lands where it was.
+                // The pivot sits at the middle of the mesh so the shell grows about
+                // the block rather than off one end, and the piece is offset back by
+                // the same amount so the mesh lands where it was.
                 Vector3 middle = shape.bounds.center;
                 GameObject pivot = new GameObject("Shell");
                 pivot.transform.SetParent(drawn[i].transform, false);
@@ -805,24 +655,28 @@ namespace GitView
                 Paint(piece, category);
                 Keep(pivot, category);
                 _pivots.Add(pivot.transform);
-                Bounds part = shape.bounds;
-                part.center = drawn[i].transform.TransformPoint(part.center);
-                part.extents = Vector3.Scale(part.extents,
-                                             drawn[i].transform.lossyScale);
-                if (made == 0) { covered = part; } else { covered.Encapsulate(part); }
                 made++;
             }
             return made > 0;
         }
 
         /// <summary>
-        /// Holds on to a shell that is not under the overlay's container, so that it
-        /// is hidden, recoloured and destroyed with the rest of them.
+        /// Holds on to a shell that is not under the overlay's container, so it is
+        /// hidden, recoloured and destroyed with the rest.
         /// </summary>
         private void Keep(GameObject shell, int category)
         {
             shell.SetActive(!_hidden);
             _loose.Add(shell);
+            Note(shell, category);
+        }
+
+        /// <summary>
+        /// Files a shell under its category, which is how a colour change finds the
+        /// ones it has to repaint.
+        /// </summary>
+        private void Note(GameObject shell, int category)
+        {
             if (_shells[category] == null)
             {
                 _shells[category] = new List<GameObject>();
@@ -833,15 +687,11 @@ namespace GitView
         /// <summary>
         /// The mesh a renderer is drawing, in the space of its own transform.
         ///
-        /// Two kinds of renderer answer. An ordinary one keeps its mesh in a
-        /// MeshFilter beside it and the mesh can be shared as it stands. A *skinned*
-        /// one has no MeshFilter at all: its shape is worked out every frame from
-        /// bones, which is what a fuel hose, a rope and a spring are -- so its mesh
-        /// has to be baked at the pose it is in now. Missing that was why a hose came
-        /// out marked at one end and nowhere else: the end fitting is an ordinary
-        /// mesh and the hose itself is not.
-        ///
-        /// Anything else -- particles, trails, lettering -- has no mesh to take.
+        /// Two kinds answer. An ordinary renderer keeps its mesh in a MeshFilter
+        /// beside it, to be shared as it stands. A *skinned* one has no MeshFilter at
+        /// all -- its shape is worked out every frame from bones, which is what a
+        /// hose, a rope and a spring are -- so its mesh has to be baked at the pose it
+        /// is in now. Anything else has no mesh to take.
         /// </summary>
         private Mesh MeshOf(Renderer renderer)
         {
@@ -866,19 +716,17 @@ namespace GitView
                     // per copy, and nothing else will ever let go of it.
                     Remember(baked);
                     // A bake can come back empty -- no bones yet, nothing posed --
-                    // and an empty mesh is a shell that is there, is painted, is
-                    // counted as drawn, and cannot be seen.
+                    // and an empty mesh is a shell that counts as drawn and cannot be
+                    // seen.
                     if (baked.vertexCount == 0)
                     {
                         return null;
                     }
-                    // And it can come back in a space that is not the renderer's.
-                    // Which space a bake lands in depends on where the mesh's root
-                    // bone is, and a fuel hose's is not its renderer -- so the copy
-                    // came out as a spike of black threads reaching off towards the
-                    // machine's origin. There is no way to ask which it did, so the
-                    // answer is measured: a copy that is not about the size of the
-                    // thing it is copying is not a copy of it.
+                    // And it can come back in a space that is not the renderer's,
+                    // depending on where the mesh's root bone is -- a fuel hose's is
+                    // not its renderer, and the copy came out as a spike of black
+                    // threads reaching towards the machine's origin. Nothing can be
+                    // asked, so it is measured instead.
                     if (!SameSize(baked, skinned))
                     {
                         Log.Warn("a bent mesh came back the wrong size and was not " +
@@ -903,12 +751,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Whether a baked mesh is about the size of what the renderer is drawing.
-        ///
-        /// The one check available on a bake landing in the wrong space: the
-        /// renderer's own bounds are in world units and known good, and the bake's
-        /// are in whatever space it chose. Scaled into the world and compared, a
-        /// copy that is out by more than a factor of three is not a copy.
+        /// Whether a baked mesh is about the size of what the renderer is drawing --
+        /// the one check available on a bake landing in the wrong space. The
+        /// renderer's bounds are world units and known good; a copy out by more than
+        /// a factor of three is not a copy.
         /// </summary>
         private static bool SameSize(Mesh baked, Renderer against)
         {
@@ -925,8 +771,8 @@ namespace GitView
 
         /// <summary>
         /// Keeps a mesh that was made rather than borrowed, so it can be destroyed
-        /// with the overlay. A Mesh built at runtime is not collected when the object
-        /// carrying it is: it has to be asked to go.
+        /// with the overlay: a Mesh built at runtime is not collected with the object
+        /// carrying it.
         /// </summary>
         private void Remember(Mesh made)
         {
@@ -940,9 +786,8 @@ namespace GitView
         private List<Mesh> _made;
 
         /// <summary>
-        /// The block in the machine with this identifier, or null. Looked up through
-        /// a table built once per diff: a machine can hold a thousand blocks and a
-        /// diff can hold a hundred surfaces.
+        /// The block in the machine with this identifier, or null. Through a table
+        /// built once per diff: a machine can hold a thousand blocks.
         /// </summary>
         private GameObject LiveBlock(string id)
         {
@@ -978,9 +823,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// The machine's blocks by identifier, for the length of one diff. Thrown
-        /// away with the overlay, since the next one is drawn over a machine that has
-        /// been loaded again.
+        /// The machine's blocks by identifier, for the length of one diff: the next
+        /// one is drawn over a machine that has been loaded again.
         /// </summary>
         private Dictionary<string, GameObject> _live;
 
@@ -988,48 +832,25 @@ namespace GitView
         private Dictionary<int, GameObject> _kinds;
 
         /// <summary>
-        /// How many build surfaces the last diff drew, for the log. Worth counting:
-        /// a surface that resolved and one that did not look the same on screen
-        /// unless you know which you are looking at.
-        /// </summary>
-        private int _surfaces;
-
-        // How the blocks of the last diff were drawn: copied from the machine, or
-        // built from a placement ghost because there was nothing to copy.
-        private int _copied;
-        private int _guessed;
-
-        /// <summary>
-        /// How far outside the real slab the mark round it is drawn: a little proud
-        /// of each face, and a little wider than the outline.
-        ///
-        /// It has to be *outside*. A build surface is a slab with a thickness the
-        /// player sets, so a flat sheet through its corners lies on the middle of it
-        /// -- sealed inside the block, drawn every frame and visible from nowhere,
-        /// which is exactly what the first attempt at this did. The other shells have
-        /// the same problem and solve it the same way, by being a few per cent larger
-        /// than the block they mark.
+        /// How far outside the real slab the mark round it is drawn: a little proud of
+        /// each face, a little wider than the outline. It has to be outside -- a sheet
+        /// through the corners lies on the middle of a slab with a thickness, sealed
+        /// inside the block and visible from nowhere.
         /// </summary>
         private const float SurfaceSkin = 0.05f;
         private const float SurfaceSwell = 1.02f;
 
         /// <summary>
         /// A slab through the given corners, a little larger than the surface it
-        /// marks: two faces and the rim between them.
+        /// marks: two faces and the rim between them. A mesh of ours, since the
+        /// outline is whatever shape the player dragged it into.
         ///
-        /// A mesh of ours rather than a primitive: the outline is a shape the player
-        /// dragged into whatever form they liked, and no primitive is that shape.
-        ///
-        /// Three things here are deliberately the blunt version, because a surface
-        /// that is not drawn is worse than one drawn a shade too generously:
-        ///
-        /// - The faces are fans from the *middle* rather than from the first corner,
-        ///   so an outline pulled into a dart is still covered.
-        /// - The plane is Newell's normal -- the whole outline rather than its first
-        ///   three corners, which say nothing when they happen to be in a line.
-        /// - Every triangle is wound both ways. Which way round the loop the walk
-        ///   came out is the file's business, so "the front" is not knowable, and a
-        ///   slab facing away from you is a slab you cannot see.
+        /// Three things are deliberately the blunt version, a surface not drawn being
+        /// worse than one drawn a shade too generously: the faces are fans from the
+        /// *middle*, so an outline pulled into a dart is still covered; the plane is
+        /// Newell's normal, which the whole outline votes on rather than three corners
+        /// that may be in a line; and every triangle is wound both ways, since which
+        /// way round the walk came out is the file's business.
         /// </summary>
         private GameObject Sheet(Vector3[] corners, float thickness)
         {
@@ -1048,8 +869,7 @@ namespace GitView
                 middle /= n;
 
                 // Newell's method: the sum of the outline's own turns, which is the
-                // plane's normal for any polygon and does not care which three
-                // corners you happen to look at first.
+                // plane's normal for any polygon.
                 Vector3 up = Vector3.zero;
                 for (int i = 0; i < n; i++)
                 {
@@ -1102,8 +922,6 @@ namespace GitView
                                                   typeof(MeshRenderer));
                 sheet.GetComponent<MeshFilter>().sharedMesh = mesh;
                 OnMachineLayer(sheet);
-                Log.Info("drew a build surface of " + n + " corners, " +
-                         mesh.bounds.size + " across.");
                 return sheet;
             }
             catch (Exception e)
@@ -1146,20 +964,15 @@ namespace GitView
         }
 
         /// <summary>
-        /// Draws the part of a two-ended block that is neither of its ends: the
-        /// brace itself, the length of hose, the rope.
+        /// Draws the part of a two-ended block that is neither of its ends: the brace
+        /// itself, the length of hose, the rope.
         ///
-        /// The two ends are stored in the block's own local space -- Besiege saves
-        /// them through <c>transform.InverseTransformPoint</c> and loads them back
-        /// through <c>TransformPoint</c> -- so putting them back means the block's
-        /// rotation and its scale, in that order. The overlay's container sits on
-        /// the same transform the blocks are parented to, which is the space the
-        /// saved position and rotation are already in, so no more than that is
-        /// needed.
-        ///
-        /// A cylinder of Unity's rather than another ghost: there is no prefab for
-        /// "the middle of a brace" to instantiate, and the shape is a tube between
-        /// two points whatever the block is.
+        /// The ends are stored in the block's own local space -- Besiege saves them
+        /// through <c>InverseTransformPoint</c> -- so putting them back means the
+        /// block's rotation and then its scale. The overlay's container sits on the
+        /// transform the blocks are parented to, which is the space the saved position
+        /// and rotation are already in. A Unity cylinder rather than a ghost: there is
+        /// no prefab for "the middle of a brace".
         /// </summary>
         private bool DrawSpan(BlockRecord block, int category)
         {
@@ -1193,8 +1006,7 @@ namespace GitView
 
         /// <summary>
         /// One of a block's local points, in the space the overlay is drawn in.
-        /// Rotation then scale, because that is the order a transform applies them
-        /// and these came out of one.
+        /// Rotation then scale, the order a transform applies them.
         /// </summary>
         private static Vector3 Point(BlockRecord block, Vector3 local)
         {
@@ -1208,23 +1020,15 @@ namespace GitView
             OnPivot(shell, _container.transform);
             Paint(shell, category);
             shell.SetActive(true);
-
-            if (_shells[category] == null)
-            {
-                _shells[category] = new List<GameObject>();
-            }
-            _shells[category].Add(shell);
+            Note(shell, category);
         }
 
         /// <summary>
         /// Hangs a finished shell off a pivot at the middle of what it draws, and
-        /// grows it there by however much the player has asked for.
-        ///
-        /// The middle of the shell rather than the block's own origin, which is not
-        /// the same point: a block's origin is wherever its model was built around --
-        /// the base of a wheel, one end of a cannon -- so growing a shell about it
-        /// slides the shell off the block instead of wrapping it. About the middle,
-        /// what comes out is a coat over the block whatever shape the block is.
+        /// grows it there by however much the player asked for. The middle rather than
+        /// the block's own origin, which is wherever its model was built around -- the
+        /// base of a wheel, one end of a cannon -- and growing about that slides the
+        /// shell off the block instead of wrapping it.
         /// </summary>
         private void OnPivot(GameObject shell, Transform under)
         {
@@ -1264,15 +1068,15 @@ namespace GitView
         }
 
         /// <summary>
-        /// Every shell's pivot, so that the size can be changed while the diff is on
-        /// screen instead of drawing it all again.
+        /// Every shell's pivot, so the size can be changed while the diff is on screen
+        /// instead of drawing it all again.
         /// </summary>
         private readonly List<Transform> _pivots = new List<Transform>();
 
         /// <summary>
-        /// The shells that are not under the overlay's own container: the copies,
-        /// which hang off the very block they are marking. They have to be hidden and
-        /// destroyed by hand, since nothing else owns them.
+        /// The shells that are not under the overlay's container: the copies, which
+        /// hang off the very block they mark and so have to be hidden and destroyed
+        /// by hand.
         /// </summary>
         private readonly List<GameObject> _loose = new List<GameObject>();
 
@@ -1324,17 +1128,12 @@ namespace GitView
         /// <summary>
         /// Strips a placement ghost down to the part of it that draws.
         ///
-        /// A ghost is not the inert model it looks like. It carries
-        /// <c>GhostTrigger</c> and, on some blocks, <c>GhostPinTrigger</c>: the
-        /// behaviours that turn the preview red while it is inside something, and
-        /// that put the game's INTERSECTION warning on screen when it is. They work
-        /// off trigger colliders, and every ghost this mod draws sits exactly on a
-        /// block of the machine -- so a diff of a dozen blocks raises a dozen
-        /// intersection warnings the moment it appears, which is what the player
-        /// sees: a warning every single time they click a version.
-        ///
-        /// The behaviours go, and the colliders with them. Nothing here is meant to
-        /// interact with anything; it is a coloured shape hanging in the air.
+        /// A ghost is not the inert model it looks like: it carries
+        /// <c>GhostTrigger</c> and sometimes <c>GhostPinTrigger</c>, which turn the
+        /// preview red inside something and put the game's INTERSECTION warning on
+        /// screen. Every ghost this mod draws sits exactly on a block of the machine,
+        /// so a diff of a dozen blocks would raise a dozen warnings the moment it
+        /// appeared. The behaviours go, and the colliders with them.
         /// </summary>
         private static void Sterilise(GameObject ghost)
         {
@@ -1346,7 +1145,7 @@ namespace GitView
                     continue;
                 }
                 // Disabled as well as destroyed: Destroy takes effect at the end of
-                // the frame, and one Update in between is one warning on screen.
+                // the frame, and one Update in between is a warning on screen.
                 behaviours[i].enabled = false;
                 UnityEngine.Object.Destroy(behaviours[i]);
             }
@@ -1372,14 +1171,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Colours every surface of a ghost.
-        ///
-        /// Where a translucent shader can be found, the ghost's own materials are
-        /// replaced outright, which is the only way to be sure of the colour --
-        /// Besiege's ghost material may not have a colour property to set at all.
-        /// Where one cannot, a property block is the fallback: it costs nothing,
-        /// touches no shared material, and works if the ghost shader does happen to
-        /// take a tint.
+        /// Colours every surface of a ghost. Where a translucent shader can be found
+        /// the ghost's materials are replaced outright, which is the only way to be
+        /// sure of the colour; where one cannot, a property block is the fallback --
+        /// it costs nothing and works if the ghost's own shader takes a tint.
         /// </summary>
         private void Paint(GameObject ghost, int category)
         {
@@ -1434,10 +1229,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Sets a colour on a material both ways round. Which of the two properties
-        /// a shader actually reads depends on which shader was found:
-        /// <c>Particles/Alpha Blended</c> wants <c>_TintColor</c>, the rest want
-        /// <c>_Color</c>, and setting one a shader does not have is free.
+        /// Sets a colour on a material both ways round: <c>Particles/Alpha Blended</c>
+        /// wants <c>_TintColor</c>, the rest want <c>_Color</c>, and setting one a
+        /// shader does not have is free.
         /// </summary>
         private static void Tint(Material material, Color colour)
         {
@@ -1462,8 +1256,6 @@ namespace GitView
                 if (found != null)
                 {
                     _shader = found;
-                    Log.Info("drawing the overlay with the '" + ShaderCandidates[i] +
-                             "' shader.");
                     return _shader;
                 }
             }
@@ -1475,10 +1267,9 @@ namespace GitView
 
         /// <summary>
         /// The transform saved block coordinates are relative to: whatever the
-        /// machine's own blocks are parented to. Taken off a block rather than
-        /// named directly, because the field holding it on <c>Machine</c> is not
-        /// public. An empty machine has no block to ask, and then the machine's own
-        /// transform is the same thing.
+        /// machine's blocks are parented to. Taken off a block, the field holding it
+        /// on <c>Machine</c> not being public; an empty machine has no block to ask,
+        /// and then the machine's own transform is the same thing.
         /// </summary>
         private static Transform BlockRoot()
         {

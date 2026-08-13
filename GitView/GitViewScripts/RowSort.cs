@@ -5,10 +5,8 @@ namespace GitView
 {
     /// <summary>
     /// Ordering for the history list. Engine-free, so the headless tests cover it.
-    ///
-    /// Written as int constants rather than an enum: Besiege's in-game C# compiler
-    /// segfaults on an enum declaration, and this mod is built with that same
-    /// compiler.
+    /// Int constants rather than an enum: Besiege's own compiler, which builds this
+    /// mod, segfaults on an enum declaration.
     /// </summary>
     public static class RowSort
     {
@@ -18,36 +16,30 @@ namespace GitView
         public const int ByRemoved = 3;
 
         /// <summary>
-        /// Alphabetical, by what the row is called. Only worth having since the
-        /// list can hold machines chosen by hand rather than the versions of one
-        /// machine, whose names are all the same word and a time.
+        /// Alphabetical. Only worth having since the list can hold machines chosen
+        /// by hand; one machine's versions are all the same word and a time.
         /// </summary>
         public const int ByName = 4;
 
         /// <summary>
-        /// By the number in the source column: a version's place in the history, or
-        /// -- for machines chosen by hand -- the order they were chosen in. Which
-        /// is why it is a key of its own rather than the same thing as time.
+        /// By the number in the first column: a version's place in the history, or
+        /// the order hand-picked machines were chosen in -- which is why it is a key
+        /// of its own rather than the same thing as time.
         /// </summary>
         public const int ByNumber = 5;
 
         /// <summary>
-        /// How many blocks the machine has at this version, all told -- which is the
-        /// one number in the row that is about the machine rather than about a
-        /// comparison, and the one every other number is a change to.
+        /// How many blocks the machine has at this version: the one number in the
+        /// row about the machine rather than about a comparison.
         /// </summary>
         public const int ByBlocks = 6;
         public const int ColumnCount = 7;
 
         /// <summary>
         /// Whether a column holds numbers that have to be read out of the files
-        /// before they mean anything.
-        ///
-        /// Worth asking, because those are the columns a player can sort by before
-        /// there is anything to sort: the list is on screen in a fraction of a second
-        /// and the counts arrive over the next few, so a heading clicked early orders
-        /// the rows by a column of dots. The order is applied again when the reading
-        /// finishes.
+        /// first. Those are the ones a player can sort by before there is anything
+        /// to sort -- the counts arrive over a few seconds -- so the order is
+        /// applied again when the reading finishes.
         /// </summary>
         public static bool IsCount(int column)
         {
@@ -61,10 +53,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// What a column is called. Only the first one turns on
-        /// <paramref name="chosen"/>: its number is a place in one machine's history
-        /// when the list is that, and the order the player picked them in when the
-        /// list is machines they chose. Two different things, so two names.
+        /// What a column is called. Only the first turns on <paramref name="chosen"/>:
+        /// its number is a place in one machine's history, or the order the player
+        /// picked machines in. Two different things, so two names.
         /// </summary>
         public static string ColumnName(int column, bool chosen)
         {
@@ -81,16 +72,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Sorts in place. Ties break on time, newest first, so that ordering by a
-        /// count -- where most rows are a 0 or a 1 -- still reads as a history
-        /// rather than as whatever order the folder happened to come back in.
-        ///
-        /// And any tie left after that breaks on the number, which no two rows
-        /// share. That last rule is what makes the order an order at all:
-        /// <c>List.Sort</c> is not a stable sort, so rows it is told are equal come
-        /// back in an arbitrary and changing arrangement -- two machines saved in
-        /// the same second, or a whole list whose times could not be read, would
-        /// shuffle themselves every time the player clicked a heading.
+        /// Sorts in place. Ties break on time, newest first, so ordering by a count
+        /// -- where most rows are 0 or 1 -- still reads as a history; any tie left
+        /// breaks on the number, which no two rows share. That last rule is what
+        /// makes it an order at all, since <c>List.Sort</c> is not stable and rows
+        /// it is told are equal come back shuffled on every click.
         /// </summary>
         public static void Apply(List<VersionEntry> rows, int column, bool ascending)
         {
@@ -121,20 +107,14 @@ namespace GitView
         }
 
         /// <summary>
-        /// The version before this one in the machine's own history: the largest
-        /// number below this one, or null if this is the oldest there is.
+        /// The version before this one in the machine's own history -- the largest
+        /// number below it, or null if this is the oldest.
         ///
-        /// Nothing to do with how the list is arranged. This is what the counts in a
-        /// row are measured against, and they have to be a fact about the version --
-        /// what that save did -- or the columns holding them cannot be sorted. A
-        /// count that changed with the arrangement would mean sorting by "added" put
-        /// the rows in an order that was true a moment ago and is not true of the
-        /// numbers now beside them.
-        ///
-        /// By number rather than by time, which is the same thing for one machine's
-        /// versions and is not for machines picked out by hand: the load screen
-        /// cannot date most of those, so any number of them share a time of "none at
-        /// all", while the number is always the order they were picked in.
+        /// Nothing to do with how the list is arranged: this is what a row's counts
+        /// are measured against, and they have to be a fact about the version or the
+        /// columns holding them cannot be sorted. By number rather than time, which
+        /// are the same thing for one machine's versions and are not for hand-picked
+        /// machines, most of which the load screen cannot date at all.
         /// </summary>
         public static VersionEntry Earlier(List<VersionEntry> rows, VersionEntry entry)
         {
@@ -159,18 +139,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// The row under this one, in the order the list is being shown in, or null
-        /// if it is the bottom row.
-        ///
-        /// What the machine on screen is compared with when nothing is pinned: the
-        /// row you can see under it, whichever heading the list is sorted by. That
-        /// keeps the arrow a picture of the comparison -- it joins two rows that are
-        /// next to each other -- and it lets a diff be taken between any two versions
-        /// by putting them next to each other.
-        ///
-        /// Not what the counts in the columns are measured against; those are
-        /// <see cref="Earlier"/>, and the difference between the two is the
-        /// difference between what you are looking at and what the table says.
+        /// The row under this one in the order the list is shown in, or null at the
+        /// bottom. What the machine on screen is compared with when nothing is
+        /// pinned, so the arrow always joins two adjacent rows and any two versions
+        /// can be diffed by putting them next to each other. Not what the counts are
+        /// measured against -- those are <see cref="Earlier"/>.
         /// </summary>
         public static VersionEntry Below(List<VersionEntry> rows, VersionEntry entry)
         {
@@ -205,11 +178,9 @@ namespace GitView
                 case ByNumber: return left.Number.CompareTo(right.Number);
                 case ByBlocks: return left.BlockCount.CompareTo(right.BlockCount);
                 default:
-                    // Two rows nothing can put a time to are put in name order
-                    // instead. Sorting by time is asking for the list in an order
-                    // that means something, and "the order they happened to be in"
-                    // is not one -- see VersionEntry.FromTimestamp for why a machine
-                    // picked out of the load screen may have no date at all.
+                    // Two rows nothing can date go in name order instead: "the order
+                    // they happened to be in" is not an order anybody asked for. See
+                    // VersionEntry.FromTimestamp for why a machine may have no date.
                     if (left.Saved == DateTime.MinValue &&
                         right.Saved == DateTime.MinValue)
                     {

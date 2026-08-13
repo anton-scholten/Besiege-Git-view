@@ -22,12 +22,9 @@ namespace GitView
 
         /// <summary>
         /// Besiege's UI font where UI Factory can supply it, Unity's stock one
-        /// otherwise.
-        ///
-        /// Worth checking rather than trusting: Besiege writes its interface
-        /// entirely in capitals, so a font baked for it may carry no lowercase
-        /// glyphs at all, and handing that font a timestamp would draw nothing --
-        /// a blank row that reads like a layout bug rather than a font problem.
+        /// otherwise. Worth checking rather than trusting: the game writes its
+        /// interface in capitals, so a font baked for it may have no digits or
+        /// lowercase at all, and a timestamp would draw as a blank row.
         /// </summary>
         public static Font DefaultFont
         {
@@ -66,12 +63,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// A Screen Space - Overlay canvas above Besiege's own UI.
-        ///
-        /// Kept below 30000, which is the sorting order UnityEngine.UI.Dropdown
-        /// hardcodes for a popup list's canvas; a canvas that ties with it wins and
-        /// leaves the list invisible and unclickable. Besiege's own UI never sets a
-        /// sorting order from code, so there is nothing between here and there.
+        /// A Screen Space - Overlay canvas above Besiege's own UI. Kept below 30000,
+        /// which is what <c>UnityEngine.UI.Dropdown</c> hardcodes for a popup list --
+        /// a canvas that ties with it wins and leaves the list unclickable.
         /// </summary>
         public static Canvas CreateCanvas(GameObject host, int sortingOrder)
         {
@@ -100,15 +94,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes a strip off the top of a rect, whether it is stretched to its
-        /// parent or sized in pixels.
-        ///
-        /// The two need opposite treatment and look identical from the outside. A
-        /// stretched rect's offsets are distances from its anchors, so lowering the
-        /// top offset shortens it and nothing else needs doing. A fixed one has a
-        /// height and a position about its pivot, so shortening it alone would take
-        /// the strip out of both ends; holding the bottom edge still means sliding
-        /// it down by the pivot's share of what it lost.
+        /// Takes a strip off the top of a rect, stretched or sized in pixels. The two
+        /// look identical from outside and need opposite treatment: a stretched
+        /// rect's offsets are distances from its anchors, so lowering the top offset
+        /// is the whole of it, while a fixed one also has to slide down by the
+        /// pivot's share of what it lost or it loses height at both ends.
         /// </summary>
         public static void InsetTop(RectTransform rect, float amount)
         {
@@ -146,18 +136,12 @@ namespace GitView
         /// <summary>
         /// Puts a rect immediately above or below another one, matching its width.
         ///
-        /// Measured rather than derived. The obvious approach — anchor the strip to
-        /// the same edge of the window and step by a known height — assumes the
-        /// window's own rect is the box you can see, and for a prefab it need not
-        /// be: the frame can be a child, inset inside a larger root, and the
-        /// scrolling area inset again inside that for its scrollbar. Anything
-        /// placed by arithmetic then lands somewhere unrelated, and anything sized
-        /// by arithmetic ends up a scrollbar's width out of step with the rows it
-        /// is a heading for.
-        ///
+        /// Measured rather than derived: anchoring to the window and stepping by a
+        /// known height assumes the window's rect is the box you can see, and in a
+        /// prefab the frame can be a child inset inside a larger root with the
+        /// scrolling area inset again for its scrollbar.
         /// <c>CalculateRelativeRectTransformBounds</c> asks where the box actually
-        /// is, in the coordinates of the thing we are parenting to, which is true
-        /// whatever the prefab's internal layout turns out to be.
+        /// is, whatever the prefab's internal layout turns out to be.
         /// </summary>
         public static void PlaceStrip(RectTransform strip, RectTransform against,
                                       RectTransform space, float height, bool above)
@@ -187,16 +171,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts a strip's left and right edges exactly where another object's are,
-        /// less an inset on each side, without touching how tall it is or where it
-        /// sits vertically.
-        ///
-        /// For a header over a list: the strip is placed against the scrolling area,
-        /// but the rows are laid out inside the *content* -- and the two need not be
-        /// the same width or start at the same x, since a scroll view may inset its
-        /// content for a scrollbar or a mask. Aligning the header to the box the
-        /// rows are actually in is the only way to be sure a column heading is over
-        /// its column; anything else is arithmetic about a prefab we do not own.
+        /// Puts a strip's left and right edges where another object's are, less an
+        /// inset each side, without touching its height. For a header over a list:
+        /// the strip is placed against the scrolling area but the rows are laid out
+        /// inside the *content*, which a scroll view may inset for a scrollbar or a
+        /// mask -- so only the box the rows are in can say where a column is.
         /// </summary>
         public static void MatchWidth(RectTransform strip, RectTransform rows,
                                       RectTransform space, float inset)
@@ -215,57 +194,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Hangs a panel off the bottom-left corner of a control, in the space of
-        /// whatever it is parented to.
-        ///
-        /// Measured for the same reason <see cref="PlaceStrip"/> is: the control
-        /// being dropped from is a UIFactory prefab whose visible box need not be
-        /// its rect, and it sits inside a header inside a window, none of which are
-        /// pivoted or anchored the same way.
-        /// </summary>
-        public static void PlaceUnder(RectTransform panel, RectTransform under,
-                                      RectTransform space, float gap)
-        {
-            if (panel == null || under == null || space == null)
-            {
-                return;
-            }
-
-            Canvas.ForceUpdateCanvases();
-            Bounds box = RectTransformUtility.CalculateRelativeRectTransformBounds(space, under);
-
-            panel.anchorMin = new Vector2(0.5f, 0.5f);
-            panel.anchorMax = new Vector2(0.5f, 0.5f);
-            panel.pivot = new Vector2(0f, 1f);
-            // As in PlaceStrip: the bounds are relative to the parent's pivot and
-            // anchoredPosition is relative to the anchor, which is the centre of the
-            // parent's rect. They coincide only for a centre-pivoted parent.
-            Vector2 at = new Vector2(box.center.x - box.extents.x,
-                                     box.center.y - box.extents.y - gap) - space.rect.center;
-
-            // Pulled back inside if hanging it off that corner would put it past
-            // the parent's edge, which the rightmost of a row of controls always
-            // would. Left-aligned under its control where there is room, and flush
-            // with the edge where there is not.
-            // sizeDelta rather than rect.width: the anchors were changed a line ago
-            // and no layout pass has run since, but with the anchors together
-            // sizeDelta is the width by definition.
-            float half = space.rect.width * 0.5f;
-            at.x = Mathf.Min(at.x, half - panel.sizeDelta.x);
-            at.x = Mathf.Max(at.x, -half);
-            panel.anchoredPosition = at;
-        }
-
-        /// <summary>
-        /// Puts a control in a window's title bar, at the right-hand end: square,
-        /// as tall as the bar allows, and <paramref name="place"/> places along from
-        /// the corner.
-        ///
-        /// Square is the point of it. Besiege's own title-bar controls are square --
-        /// the close cross, the pin on the block panel -- and the prefab's is
-        /// authored to whatever width its own window wanted, which is not this one.
-        /// A cross stretched into a rectangle is the sort of thing that reads as a
-        /// mod before anything else about the window does.
+        /// Puts a control in a window's title bar, at the right-hand end: square, as
+        /// tall as the bar allows, <paramref name="place"/> places from the corner.
+        /// Square is the point -- Besiege's own bar controls are, and the prefab is
+        /// authored to whatever width its own window wanted.
         /// </summary>
         public static void SquareInBar(RectTransform control, RectTransform bar,
                                        int place)
@@ -274,12 +206,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// The same, at whichever end of the bar is asked for.
-        ///
-        /// The left end is for a control that is not about shutting the window --
-        /// the reset arrows on the colours -- because a title is centred in its bar
-        /// and a pile of marks at one end pushes it off centre or sits on top of it.
-        /// One at each end leaves the middle to the title.
+        /// The same, at whichever end of the bar is asked for. The left end is for a
+        /// control that is not about shutting the window: a title is centred in its
+        /// bar, and a pile of marks at one end sits on top of it.
         /// </summary>
         public static void SquareInBar(RectTransform control, RectTransform bar,
                                        int place, bool leftEnd)
@@ -320,24 +249,77 @@ namespace GitView
         private const float BarGap = 4f;
 
         /// <summary>
-        /// How much of a title-bar button one of our own marks is drawn across.
+        /// The lettering colour for anything that is not the answer: column
+        /// headings, the words beside a slider, the status line. Both windows write
+        /// in it, so it is kept in one place.
+        /// </summary>
+        public static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
+
+        /// <summary>The title bar of a window built from UI Factory's prefab, or null.</summary>
+        public static RectTransform TitleBar(GameObject window)
+        {
+            Transform bar = window == null
+                ? null : window.transform.FindChild("TopBar");
+            return bar as RectTransform;
+        }
+
+        /// <summary>
+        /// Writes a window's name in its bar, centred and at the size the prefab
+        /// authors it.
         ///
-        /// Less than all of it. A mark drawn to the edge of its button is a mark as
-        /// big as the bar is tall, which is bigger than anything Besiege puts in a
-        /// title bar -- the cog beside the cross looked like a cog on top of the
-        /// window rather than a control in it. The button keeps its size, since that
-        /// is what is being clicked; only the picture inside it comes in.
+        /// A title is to be read, not pressed. Its box is the whole width of the bar
+        /// and it is drawn over the controls in the corners, so while it took the
+        /// pointer those only answered on whatever part of them the title did not
+        /// reach.
+        /// </summary>
+        public static void SetTitle(RectTransform bar, string title)
+        {
+            Text label = bar == null ? null : bar.GetComponentInChildren<Text>(true);
+            if (label == null)
+            {
+                return;
+            }
+            UIF.Style(label, 0, TextAnchor.MiddleCenter);
+            label.text = title;
+            label.raycastTarget = false;
+        }
+
+        /// <summary>
+        /// Squares the prefab's close cross off against the bar and adds to what it
+        /// does, and answers the next free place along.
+        ///
+        /// Squared rather than left the size the prefab authored it -- see
+        /// <see cref="SquareInBar"/> -- so that the marks we add and the one UI
+        /// Factory supplies are the same control at the same size, which is the only
+        /// way a pair of buttons in a corner look deliberate.
+        /// </summary>
+        public static int HookClose(RectTransform bar, Action closed)
+        {
+            Transform close = bar == null ? null : bar.FindChild("CloseButton");
+            if (close == null)
+            {
+                return 0;
+            }
+            SquareInBar(close as RectTransform, bar, 0);
+            // The prefab's own handler may already hide the window; adding to it is
+            // what makes sure whatever else belongs to the window goes with it.
+            UIF.OnClick(close.gameObject, closed);
+            return 1;
+        }
+
+        /// <summary>
+        /// How much of a title-bar button one of our marks is drawn across. Less than
+        /// all of it: a mark drawn to the button's edge is as big as the bar is tall,
+        /// which is bigger than anything Besiege puts in one. The button keeps its
+        /// size, since that is what is clicked; only the picture comes in.
         /// </summary>
         private const float IconShare = 0.55f;
 
         /// <summary>
         /// A picture button for a window's title bar: UI Factory's Icon Button, which
-        /// is what the close cross itself is, wearing a mark of ours.
-        ///
-        /// The sprite goes on the child called "Icon" where the prefab has one. The
-        /// fallback is whatever Image the button does have, because the name is UI
-        /// Factory's to change and a button wearing the wrong picture is a smaller
-        /// failure than a button with none.
+        /// is what the close cross itself is, wearing a mark of ours. The sprite goes
+        /// on the child called "Icon", falling back to whatever Image the button does
+        /// have -- the name is UI Factory's to change.
         /// </summary>
         public static GameObject BarButton(RectTransform bar, int place, string name,
                                            Sprite face, Color tint, Action clicked)
@@ -390,6 +372,20 @@ namespace GitView
 
             UIF.OnClick(button, clicked);
             return button;
+        }
+
+        /// <summary>
+        /// One of the mod's own drawings as a sprite: the whole texture, pivoted in
+        /// the middle, and neither it nor the sprite collected while the mod runs.
+        /// </summary>
+        public static Sprite Drawn(Texture2D texture)
+        {
+            texture.hideFlags = HideFlags.HideAndDontSave;
+            Sprite made = Sprite.Create(texture,
+                                        new Rect(0f, 0f, texture.width, texture.height),
+                                        new Vector2(0.5f, 0.5f));
+            made.hideFlags = HideFlags.HideAndDontSave;
+            return made;
         }
 
         /// <summary>Centres a square of the given side inside its parent.</summary>

@@ -11,11 +11,10 @@ namespace GitView
     /// versions, reading one into a <see cref="MachineSnapshot"/>, and putting one
     /// back into the build area.
     ///
-    /// It never touches the filesystem itself. Listing goes through the same
-    /// virtual folders the load screen browses, and a .bsg is parsed by the game's
-    /// own <c>XmlLoader</c> -- which is not politeness but necessity: the mod
-    /// loader refuses any assembly that references System.IO's file classes or
-    /// System.Xml at all, so a mod cannot open its own files, let alone parse them.
+    /// It never touches the filesystem itself -- listing goes through the load
+    /// screen's own virtual folders and a .bsg is parsed by the game's
+    /// <c>XmlLoader</c>. That is necessity, not politeness: the mod loader refuses
+    /// any assembly referencing System.IO's file classes or System.Xml.
     /// </summary>
     public static class VersionScan
     {
@@ -27,16 +26,14 @@ namespace GitView
         // ---------------------------------------------------------------- listing
 
         /// <summary>
-        /// The version folder for a slot in the load screen, or null if that
-        /// machine has no history.
+        /// The version folder for a slot in the load screen, or null if that machine
+        /// has no history.
         ///
-        /// The route to it is the game's own, from
-        /// <c>FileBrowserView.OnPageViewSlotVersions</c>: walk up to the root of
-        /// whatever collection the slot came from, find the AutoSave folder in it,
-        /// and find the folder named after the machine. Deliberately not built out
-        /// of <c>StaticSettings.MachineAutosavePath</c> and a string join -- the
-        /// browser can be showing local files, a Steam collection or mod.io, and
-        /// only the object it handed us knows which.
+        /// The game's own route, from <c>FileBrowserView.OnPageViewSlotVersions</c>:
+        /// up to the root of whatever collection the slot came from, into AutoSave,
+        /// then the folder named after the machine. Not built out of
+        /// <c>StaticSettings.MachineAutosavePath</c> and a string join, because the
+        /// browser may be showing local files, a Steam collection or mod.io.
         /// </summary>
         public static VirtualFolder FolderFor(IVirtualObject machineObject)
         {
@@ -78,16 +75,14 @@ namespace GitView
         }
 
         /// <summary>
-        /// When a machine was last saved, taken from the newest version in its
-        /// autosave folder, or <c>DateTime.MinValue</c> if it has none.
+        /// When a machine was last saved, from the newest version in its autosave
+        /// folder, or <c>DateTime.MinValue</c> if it has none.
         ///
-        /// The long way round to a file's date, and the only one there is: the
-        /// browser's own <c>Date</c> is <c>DateTime.Now</c> for everything on this
-        /// platform (see <see cref="VersionEntry.FromTimestamp"/>), a mod may not
-        /// touch <c>System.IO.File</c>, and nothing Besiege exposes will answer the
-        /// question either. What it *has* written down is the time in the name of
-        /// every autosave, so the newest of those is when the machine was last
-        /// saved -- give or take the minutes since the last autosave ran.
+        /// The long way round to a file's date and the only one there is: the
+        /// browser's <c>Date</c> is <c>DateTime.Now</c> on this platform (see
+        /// <see cref="VersionEntry.FromTimestamp"/>) and a mod may not touch
+        /// <c>System.IO.File</c>. What Besiege has written down is the time in the
+        /// name of every autosave.
         /// </summary>
         public static DateTime LastSaved(IVirtualObject machineObject)
         {
@@ -122,13 +117,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// The versions in a machine's history, oldest first.
-        ///
-        /// Both kinds are included. Besiege writes an "aut" file on a timer and a
-        /// "ver" file when the player saves over the machine, and they are the same
-        /// thing to a diff -- a snapshot with a time on it. Sorting them into one
-        /// timeline is the only way the counts mean anything, since a manual save
-        /// lands between two timed ones.
+        /// The versions in a machine's history, oldest first. Both kinds: the "aut"
+        /// files the timer writes and the "ver" files a save writes are the same
+        /// thing to a diff, and only one timeline makes the counts mean anything.
         /// </summary>
         public static List<VersionEntry> Versions(VirtualFolder folder)
         {
@@ -155,9 +146,8 @@ namespace GitView
                 return versions;
             }
 
-            // Numbered here, while the list is in time order and before anything
-            // else has had a chance to sort it. A version's number is a fact about
-            // the history, not about where it happens to sit in the window.
+            // Numbered here, while the list is in time order: a version's number is
+            // a fact about the history, not about where it sits in the window.
             RowSort.Apply(versions, RowSort.ByTime, true);
             for (int i = 0; i < versions.Count; i++)
             {
@@ -228,13 +218,10 @@ namespace GitView
         // ---------------------------------------------------------------- reading
 
         /// <summary>
-        /// Reads a .bsg into the model the diff works on. Returns null if the file
-        /// cannot be parsed, which the caller shows as an uncounted row rather than
-        /// letting one bad file empty the whole list.
-        ///
-        /// Loaded as a "dummy": the parse is the same, but the game skips the work
-        /// that only matters for a machine about to exist, and reading seventy of
-        /// these in a row should not drag skin packs in behind it.
+        /// Reads a .bsg into the model the diff works on, or null if it cannot be
+        /// parsed -- which the caller shows as an uncounted row rather than letting
+        /// one bad file empty the list. Loaded as a "dummy": the same parse, without
+        /// the work that only matters for a machine about to exist.
         /// </summary>
         public static MachineSnapshot Read(string path)
         {
@@ -299,12 +286,9 @@ namespace GitView
 
         /// <summary>
         /// Picks up the two ends of a block that has two: a brace, a fuel line, a
-        /// winch's rope.
-        ///
-        /// Recognised by the data rather than by a list of block types, because the
-        /// data is what says it. Besiege's own <c>GenericDraggedBlock</c> and
-        /// <c>FuelLineBehaviour</c> both write these two keys and nothing else does,
-        /// and a modded block that drags the same way writes them too and gets drawn
+        /// winch's rope. Recognised by the data rather than a list of block types --
+        /// <c>GenericDraggedBlock</c> and <c>FuelLineBehaviour</c> write these keys
+        /// and nothing else does, so a modded block that drags the same way is drawn
         /// properly for free.
         /// </summary>
         private static void ReadSpan(BlockInfo block, BlockRecord record)
@@ -339,11 +323,10 @@ namespace GitView
         private const string ThicknessKey = "bmt-thickness";
 
         /// <summary>
-        /// Picks up what a block says about other blocks: a build surface's edges,
-        /// and an edge's two corner nodes.
-        ///
-        /// Read here and followed later, because a guid means nothing until the
-        /// block it names has been read too. See <see cref="SurfaceShape.Link"/>.
+        /// Picks up what a block says about other blocks: a surface's edges, an
+        /// edge's two nodes. Read here and followed later by
+        /// <see cref="SurfaceShape.Link"/>, since a guid means nothing until the
+        /// block it names has been read too.
         /// </summary>
         private static void ReadLinks(BlockInfo block, BlockRecord record)
         {
@@ -396,10 +379,9 @@ namespace GitView
             }
             catch (Exception)
             {
-                // Whether a skin is resolved at all depends on how the file was
-                // loaded. It is resolved the same way for every version in the
-                // folder, so an empty answer here costs a re-skin showing up as a
-                // change -- never a false one.
+                // Whether a skin resolves at all depends on how the file was loaded,
+                // and it is the same for every version in the folder -- so an empty
+                // answer costs a missed re-skin, never a false change.
                 return string.Empty;
             }
         }
@@ -407,17 +389,12 @@ namespace GitView
         /// <summary>
         /// Flattens a block's settings into one comparable string.
         ///
-        /// Read through <c>XData.RawValue</c> rather than <c>XData.Encode</c>, even
-        /// though the encoded bytes would be exact and a great deal less code.
-        /// Exact is the problem: a piston's start and end positions are settings,
-        /// they are written out of live physics, and they come back a hair
-        /// different every save. Comparing the bytes calls that a change; going
-        /// through the values means <see cref="BlockRecord.Quantise"/> can round the
-        /// noise off first.
-        ///
-        /// The block's own <c>XDataHolder.Encode</c> is not used either, for a
-        /// different reason: it carries session flags like "was this loaded from a
-        /// file", which would make every block in every version read as changed.
+        /// Through <c>XData.RawValue</c> rather than <c>XData.Encode</c>: the encoded
+        /// bytes are exact, and exact is the problem -- a piston's start and end
+        /// positions come out of live physics and land a hair off every save, so
+        /// <see cref="BlockRecord.Quantise"/> has to round the noise away first.
+        /// Not <c>XDataHolder.Encode</c> either: it carries session flags like "was
+        /// this loaded from a file", which would make every block read as changed.
         /// </summary>
         private static string SettingsOf(BlockInfo block)
         {
@@ -447,13 +424,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// One setting -- its key, its type and its value -- as the one line of
-        /// text the diff compares.
-        ///
-        /// Public because the same rules have to apply to a setting read out of a
-        /// .bsg and to one read live off a block's mapper: <see cref="MapperWatch"/>
-        /// decides whether the player actually changed anything, and it would be
-        /// worse than useless if it disagreed with the diff about what a change is.
+        /// One setting -- key, type and value -- as the line of text the diff
+        /// compares. Public because <see cref="MapperWatch"/> has to apply the same
+        /// rules to a setting read live off a block's mapper, and would be worse than
+        /// useless if it disagreed with the diff about what a change is.
         /// </summary>
         public static string Describe(XData item)
         {
@@ -465,12 +439,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// A setting's value as text, with every number quantised.
-        ///
-        /// The types are checked one by one rather than asked what they are:
-        /// <c>Type.Name</c> is <c>System.Reflection.MemberInfo.get_Name</c>, and one
-        /// reference to that is enough for the mod loader to refuse the whole
-        /// assembly. An `is` test compiles to isinst, which is not reflection.
+        /// A setting's value as text, with every number quantised. The types are
+        /// checked one by one rather than asked what they are: <c>Type.Name</c> is
+        /// <c>System.Reflection.MemberInfo.get_Name</c>, and one reference to that
+        /// makes the mod loader refuse the assembly. An `is` test compiles to isinst.
         /// </summary>
         private static string Value(object raw)
         {
@@ -512,12 +484,9 @@ namespace GitView
         // ---------------------------------------------------------------- loading
 
         /// <summary>
-        /// Replaces the machine in the build area with a saved version.
-        ///
-        /// Goes through <c>Machine.LoadMachineInfo</c>, the same call the load
-        /// screen makes, so joints, clusters and physics are worked out by Besiege
-        /// exactly as they are for any other machine and an interrupted load cannot
-        /// leave half a machine behind.
+        /// Replaces the machine in the build area with a saved version, through
+        /// <c>Machine.LoadMachineInfo</c> -- the same call the load screen makes, so
+        /// joints, clusters and physics are Besiege's to work out.
         /// </summary>
         public static bool LoadIntoWorld(string path)
         {
@@ -589,8 +558,8 @@ namespace GitView
 
         /// <summary>
         /// A virtual folder does not list its contents until it is opened, so every
-        /// step down the path needs this. Opening one is a re-read of the directory,
-        /// not a navigation -- the browser stays where the player left it.
+        /// step down the path needs this. It is a re-read of the directory, not a
+        /// navigation: the browser stays where the player left it.
         /// </summary>
         private static VirtualFolder Opened(VirtualFolder folder)
         {

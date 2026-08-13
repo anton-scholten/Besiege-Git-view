@@ -6,31 +6,26 @@ using UnityEngine.UI;
 namespace GitView
 {
     /// <summary>
-    /// The options window: the four diff colours, each on a colour slider with its
-    /// own opacity underneath.
+    /// The options window: the shell size, then the four diff colours, each on a
+    /// colour slider with its own opacity underneath.
     ///
-    /// One window for all four rather than a panel per column heading, which is what
-    /// this was. A colour is chosen against the other three -- green against orange
-    /// against red over a brown machine -- and choosing them one at a time through
-    /// four little panels that each covered the list was choosing them blind.
+    /// One window for all four rather than a panel per column heading: a colour is
+    /// chosen against the other three -- green against orange against red over a
+    /// brown machine -- and four little panels that each covered the list was
+    /// choosing them blind.
     ///
-    /// The colour slider is Besiege's: a knob dragged along a picture of the colours
-    /// it can choose. The game's own is <c>Selectors.ColourSliderSelector</c>, which
-    /// keeps that picture in a private <c>Texture</c> and lives on the block mapper,
-    /// so it cannot be borrowed for anything but a block -- but the widget is a
-    /// slider with a strip drawn behind it, and UI Factory supplies the slider.
+    /// The colour slider is Besiege's, a knob dragged along a picture of the colours
+    /// it can choose. The game's own <c>Selectors.ColourSliderSelector</c> keeps that
+    /// picture private and lives on the block mapper, but the widget is a slider with
+    /// a strip behind it and UI Factory supplies the slider.
     /// </summary>
     public class OptionsView
     {
         /// <summary>
-        /// Narrower than the window it belongs to, and wide enough to write on.
-        ///
-        /// It was half this again, and then half of that: a colour slider is chosen
-        /// from by eye and typed into when it has to be exact, so the strip only has
-        /// to be long enough to pick a hue off. What sets the width now is the title
-        /// -- "BLOCK COLORS" at the size the game writes a window's name -- and after
-        /// that the words on the left and the values on the right at a size worth
-        /// reading. A slider gets whatever is left, which is still most of it.
+        /// Narrower than the window it belongs to, and wide enough to write on. A
+        /// colour slider is chosen from by eye and typed into when it has to be
+        /// exact, so what sets the width is the title, then the words on the left and
+        /// the values on the right at a size worth reading.
         /// </summary>
         private const float Width = 384f;
         private const float Pad = 12f;
@@ -45,42 +40,31 @@ namespace GitView
         private const float LabelWidth = 52f;
 
         /// <summary>
-        /// The typed value beside a slider, and the gap before it.
-        ///
-        /// Wide enough for "#FF4C00" at the size it is written, which is what it is
-        /// for: a box that clips its own contents to "#FF4C" is worse than no box,
-        /// since a colour read off it would be the wrong colour.
+        /// The typed value beside a slider, and the gap before it: wide enough for
+        /// "#FF4C00" at the size it is written. A box that clips to "#FF4C" is worse
+        /// than no box, since a colour read off it is the wrong colour.
         /// </summary>
         private const float ValueWidth = 84f;
         private const float BoxGap = 6f;
         /// <summary>
-        /// What the words in this window are written at. The same size the list
-        /// writes a timestamp at: this is a form to read rather than a table to scan,
-        /// and it was two sizes below anything else on screen.
+        /// What the words here are written at -- the size the list writes a timestamp
+        /// at. This is a form to read rather than a table to scan.
         /// </summary>
         private const int LabelSize = 16;
 
         /// <summary>
-        /// What a typed value is written at: a little smaller than a label, because
-        /// seven characters have to fit in a box beside a slider and the word beside
-        /// it is four.
+        /// What a typed value is written at: smaller than a label, because seven
+        /// characters have to fit in a box beside a slider.
         /// </summary>
         private const int ValueSize = 14;
 
         /// <summary>How wide the strip is drawn before it is stretched over a slider.</summary>
         private const int StripPixels = 512;
 
-        private static readonly Color QuietInk = new Color(0.72f, 0.72f, 0.74f, 1f);
-
-
         /// <summary>
-        /// The order the colours are listed in: everything the save left alone
-        /// first, then what it added, changed and removed.
-        ///
-        /// The machine's own colour before the three that mark what happened to it,
-        /// and then those three in the order a save does them. It is not the order
-        /// the columns are in -- that one has the counts in it, and unchanged blocks
-        /// are not counted -- so it is written out rather than derived.
+        /// The order the colours are listed in: the machine's own colour first, then
+        /// the three that mark what happened to it. Not the order the columns are in
+        /// -- that one has the counts in it -- so it is written out.
         /// </summary>
         private static readonly int[] Order =
         {
@@ -127,9 +111,8 @@ namespace GitView
         private readonly Action _resized;
 
         /// <summary>
-        /// Whether the player has this window open -- which is not the same as
-        /// whether it is on screen, since it steps aside while the game has a menu
-        /// up, exactly as the history window does.
+        /// Whether the player has this window open, which is not whether it is on
+        /// screen: it steps aside while the game has a menu up.
         /// </summary>
         public bool Visible
         {
@@ -163,20 +146,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// Puts this window just off the right-hand edge of another, with their tops
-        /// level.
+        /// Puts this window just off the right-hand edge of another, tops level --
+        /// they are two halves of one thing, and both are the same prefab, so lining
+        /// up their rects lines up what is drawn in them.
         ///
-        /// Off the other window's own four corners, and deliberately not off the box
-        /// its contents occupy: that box is the one this was using, and a scrolling
-        /// list's content is as tall as the list is long -- a hundred versions of a
-        /// machine reach some three thousand units above the window they are clipped
-        /// inside, so "the top of the window" came out most of a screen too high.
-        /// Corners are the rect and nothing else.
-        ///
-        /// Tops level because these are two halves of one thing -- the list and what
-        /// its colours mean -- and two panels at the same height read that way. Both
-        /// are the same prefab, so lining up their rects lines up what is drawn in
-        /// them.
+        /// Off the other window's four corners, and deliberately not off the box its
+        /// contents occupy: a scrolling list's content is as tall as the list is long,
+        /// so a hundred versions put "the top of the window" most of a screen too high.
         /// </summary>
         private void PlaceBeside(RectTransform other)
         {
@@ -210,10 +186,8 @@ namespace GitView
         private const float WindowGap = 12f;
 
         /// <summary>
-        /// Pulls this window back if it has been dragged off the screen. The list
-        /// window looks after itself the same way -- see
-        /// <see cref="HistoryView.KeepOnScreen"/> -- and this one is dragged by the
-        /// same kind of bar, so it is the same problem and the same answer.
+        /// Pulls this window back if it has been dragged off the screen -- the same
+        /// problem and the same answer as <see cref="HistoryView.KeepOnScreen"/>.
         /// </summary>
         public void KeepInside()
         {
@@ -235,8 +209,7 @@ namespace GitView
         /// <summary>
         /// Shows or hides the window for a reason that is not the player's: the game
         /// has put a menu up, or taken one down. What they asked for is remembered
-        /// either way, so a menu opening and closing does not open a window they had
-        /// shut -- or leave shut one they had open.
+        /// either way, so a menu cannot open a window they had shut.
         /// </summary>
         public void Allow(bool allowed)
         {
@@ -273,8 +246,7 @@ namespace GitView
             _rect.pivot = new Vector2(0.5f, 0.5f);
             _rect.anchoredPosition = Vector2.zero;
 
-            SetTitle();
-            HookCloseButton();
+            BuildTitleBar();
 
             // The prefab is a window with a list in it. There is no list here, and
             // its scroll view would eat every click that landed on the form.
@@ -297,15 +269,13 @@ namespace GitView
         }
 
         /// <summary>
-        /// How much larger than its block each coloured shell is drawn, at the top
+        /// How much larger than its block each coloured shell is drawn -- at the top,
         /// because it is about all four colours rather than any one of them.
         ///
-        /// A shell at exactly the block's size shares its surface, and two surfaces
-        /// in the same place is a fight the graphics card settles pixel by pixel. A
-        /// little larger is a coat of paint; larger still is a marker you can pick
-        /// out of a crowded machine from across the build area. Which of those a
-        /// player wants depends on the machine, so it is a slider rather than a
-        /// number this mod chose.
+        /// A shell at exactly the block's size shares its surface, which is a fight
+        /// the graphics card settles pixel by pixel. A little larger is a coat of
+        /// paint; larger still is a marker you can pick out of a crowded machine from
+        /// across the build area, and which of those a player wants is theirs to say.
         /// </summary>
         private float BuildShell(float y)
         {
@@ -343,10 +313,9 @@ namespace GitView
             _shellBox = Box(DiffPalette.Unchanged, right, y, high, 4, false);
             if (_shellBox != null)
             {
-                // Not one of the colour boxes: this one is a multiplier written as
-                // itself -- 1 is the block's own size -- and it takes values from
-                // outside what the slider will slide to, so it needs its own
-                // validation and its own handler.
+                // Not one of the colour boxes: a multiplier written as itself, taking
+                // values from outside what the slider will slide to, so it needs its
+                // own validation and handler.
                 _shellBox.characterValidation = InputField.CharacterValidation.Decimal;
                 _shellBox.onEndEdit.RemoveAllListeners();
                 _shellBox.onEndEdit.AddListener(delegate(string typed)
@@ -382,9 +351,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Takes a typed size, as a multiple of the block's own: 1 is the block, 1.5
-        /// is half again. Anything unreadable puts the real one back rather than
-        /// guessing.
+        /// Takes a typed size, as a multiple of the block's own. Anything unreadable
+        /// puts the real one back rather than guessing.
         /// </summary>
         private void OnShellTyped(string typed)
         {
@@ -419,22 +387,17 @@ namespace GitView
                 return;
             }
             _binding = true;
-            // Written the way it is read, and in the invariant culture: a size typed
-            // as "1.15" has to come back as "1.15" wherever the player's machine
-            // thinks the decimal point goes.
+            // Invariant culture: a size typed as "1.15" has to come back as "1.15"
+            // wherever the player's machine thinks the decimal point goes.
             _shellBox.text = swell.ToString("0.00", CultureInfo.InvariantCulture);
             _binding = false;
         }
 
         /// <summary>
         /// One colour: its name, the strip it is chosen from, and how solid it is
-        /// drawn. Returns where the next one starts.
-        ///
-        /// The name is centred over its own two sliders and has no swatch beside it.
-        /// A swatch is a small square of the colour, sitting an inch from a strip
-        /// with a knob on it that is the same answer at ten times the size: it said
-        /// nothing the row was not already saying, and it was the only thing keeping
-        /// the heading off centre.
+        /// drawn. Returns where the next one starts. The name is centred over its own
+        /// two sliders, with no swatch beside it -- a small square of the colour an
+        /// inch from a knob wearing the same colour said nothing twice.
         /// </summary>
         private float BuildRow(int category, float y)
         {
@@ -451,10 +414,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// How tall a slider wants to be: whatever UI Factory authored its prefab
-        /// as. Squashing it into a height of ours is what makes a Besiege widget stop
-        /// looking like one -- the knob and the bar are drawn to each other's size,
-        /// and neither of them is ours to re-proportion.
+        /// How tall a slider wants to be: whatever UI Factory authored it as. The
+        /// knob and the bar are drawn to each other's size, and neither is ours to
+        /// re-proportion.
         /// </summary>
         private static float Tall(GameObject spawned)
         {
@@ -463,9 +425,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// How wide the knob is, which is how far the strip has to be inset for the
-        /// knob to point at the colour under it. Falls back to the control's height,
-        /// which is what a round knob on a bar usually is.
+        /// How wide the knob is, which is how far the strip is inset for the knob to
+        /// point at the colour under it. Falls back to the control's height.
         /// </summary>
         private static float Knob(UnityEngine.UI.Slider slider, float high)
         {
@@ -492,22 +453,19 @@ namespace GitView
         {
             if (_knobs[category] != null)
             {
-                // Ink rather than the colour itself: a knob faded to nothing is the
-                // one thing that cannot say what is being faded.
+                // Ink rather than the colour itself: a knob faded to nothing cannot
+                // say what is being faded.
                 _knobs[category].color = DiffPalette.Ink(category);
             }
         }
 
         /// <summary>
-        /// The colour slider: a Besiege slider with the strip of colours drawn
-        /// behind its knob.
-        ///
-        /// The strip goes on an image of our own rather than on the prefab's own
-        /// background, for the reason every other picture in this mod does -- a UI
-        /// Factory graphic can carry a CustomMaterialHandler, and a shader that does
-        /// not sample what it is given cannot be given a picture. The fill goes off
-        /// altogether: a bar that grows from the left is how a slider says "this
-        /// much", and this slider says "this one".
+        /// The colour slider: a Besiege slider with the strip of colours drawn behind
+        /// its knob. The strip goes on an image of ours rather than the prefab's
+        /// background -- a UI Factory graphic can carry a CustomMaterialHandler, and
+        /// a shader that ignores what it is given cannot be given a picture. The fill
+        /// goes off: a bar growing from the left says "this much", and this slider
+        /// says "this one".
         /// </summary>
         private float Strip(int category, float y)
         {
@@ -533,20 +491,15 @@ namespace GitView
                 return high;
             }
 
-            // Both of the prefab's own bars go. Besiege's colour slider is a knob on
-            // a picture of the colours -- see ColourSliderSelector -- and neither a
-            // dark track nor a bar filling in behind the knob is part of that. Left
-            // in, the strip read as a sticker on an ordinary slider rather than as
-            // the slider's own face.
+            // Both of the prefab's bars go: Besiege's colour slider is a knob on a
+            // picture of the colours and nothing else, and left in they read as a
+            // sticker on an ordinary slider.
             //
-            // Switched off a graphic at a time rather than by deactivating the
-            // objects they are on, which is what this did and what was losing the
-            // knob: how a prefab nests its parts is its own business, and this one
-            // keeps the handle *inside* the bar -- so turning the bar's object off
-            // took the knob with it, and the slider looked like it had none. A
-            // disabled Image draws nothing and its children carry on.
-            // The bar is found before the fill is let go of, since which one is which
-            // is worked out by elimination.
+            // Switched off a graphic at a time rather than by deactivating the objects
+            // they are on: this prefab keeps the handle *inside* the bar, so turning
+            // the bar off took the knob with it. A disabled Image draws nothing and
+            // its children carry on. The bar is found before the fill is let go of,
+            // since which is which is worked out by elimination.
             Image track = Background(slider);
             Hide(slider.fillRect, slider.handleRect);
             slider.fillRect = null;
@@ -563,20 +516,15 @@ namespace GitView
             // a raycast target, and turning off the two bars this prefab draws left
             // the whole control unclickable -- which is exactly what it looked like.
             picture.raycastTarget = true;
-            // Inset by half a knob at each end. A slider's knob does not travel the
-            // whole width of its track -- its centre stops half a knob short at both
-            // ends -- so a strip drawn edge to edge would have the knob pointing at
-            // the wrong colour by that much wherever it was near an end. Measured off
-            // the knob rather than assumed to be the slider's height, which it is not:
-            // this prefab's knob is about half as wide as the control is tall.
+            // Inset by half a knob at each end: a knob's centre stops half a knob
+            // short of both ends of its track, so a strip drawn edge to edge points at
+            // the wrong colour near either end. Measured off the knob rather than
+            // assumed to be the control's height, which it is not.
             UIF.Stretch(picture.rectTransform, Knob(slider, high) * 0.5f, high * 0.22f);
-            // Behind the knob, which has to be on top of it and had been under it.
-            // Putting the strip at the bottom of the pile rather than raising the
-            // knob is the version that cannot be wrong: whether the knob is a child
-            // of the slider or of a slide area inside it is the prefab's business,
-            // and raising "the knob's parent" raised the whole slider when the knob
-            // turned out to be a direct child -- which left the strip drawn over it
-            // and the slider looking like it had no knob at all.
+            // Behind the knob. The strip goes to the bottom of the pile rather than
+            // the knob to the top: whether the knob is a child of the slider or of a
+            // slide area inside it is the prefab's business, and raising "the knob's
+            // parent" raises the whole slider when it turns out to be a direct child.
             picture.rectTransform.SetAsFirstSibling();
 
             slider.wholeNumbers = false;
@@ -584,12 +532,9 @@ namespace GitView
             slider.maxValue = 1f;
             slider.value = Along(DiffPalette.Of(category));
 
-            // The knob wears the colour it is pointing at, which is what Besiege's
-            // own colour slider does: the strip says where on the wheel you are and
-            // the knob says what you actually get. They are not the same answer --
-            // the strip is drawn pale and hands back the colour at full strength --
-            // so the knob is the only thing in the window showing the chosen colour
-            // as it will be used.
+            // The knob wears the colour it is pointing at, as Besiege's own does:
+            // the strip is drawn pale and hands back full strength, so the knob is the
+            // only thing in the window showing the colour as it will be used.
             _knobs[category] = KnobFace(slider);
             Wear(category);
 
@@ -603,9 +548,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// How solid the colour is drawn over the machine, on an ordinary slider
-        /// with the number beside it. Nothing is picked from a strip here: it is one
-        /// value between two ends, which is what a slider is for.
+        /// How solid the colour is drawn over the machine: one value between two
+        /// ends, so an ordinary slider with the number beside it.
         /// </summary>
         private float Opacity(int category, float y)
         {
@@ -654,13 +598,9 @@ namespace GitView
 
         /// <summary>
         /// The typed value beside a slider: the colour as "#RRGGBB", or the opacity
-        /// as a whole percent.
-        ///
-        /// UI Factory's Input Field rather than a uGUI one of our own, because it
-        /// carries <c>StopsHotkeysWhenInputFieldFocused</c> -- without it, typing
-        /// "255" also fires whatever Besiege has bound to 2, 5 and 5. Missing it is
-        /// survivable: the slider still works, so an absent prefab costs a line in
-        /// the log rather than the row.
+        /// as a whole percent. UI Factory's Input Field rather than a uGUI one of our
+        /// own, for <c>StopsHotkeysWhenInputFieldFocused</c> -- without it, typing
+        /// "255" also fires whatever Besiege has bound to 2, 5 and 5.
         /// </summary>
         private InputField Box(int category, float x, float y, float high, int limit,
                                bool hex)
@@ -719,8 +659,8 @@ namespace GitView
 
         /// <summary>
         /// The bar a slider's knob runs along: whatever it draws that is neither the
-        /// fill nor the knob. Found by elimination rather than by name, since the
-        /// names inside the prefab are UI Factory's to change.
+        /// fill nor the knob. By elimination, since the names inside the prefab are
+        /// UI Factory's to change.
         /// </summary>
         private static Image Background(UnityEngine.UI.Slider slider)
         {
@@ -744,12 +684,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Stops something drawing without taking it out of the hierarchy, and leaves
-        /// whatever is under <paramref name="keep"/> alone.
-        ///
-        /// A disabled Graphic draws nothing and changes nothing else: its object
-        /// stays where it was, its children keep drawing, and the slider that owns it
-        /// carries on driving it. Deactivating the object does all three.
+        /// Stops something drawing without taking it out of the hierarchy, leaving
+        /// whatever is under <paramref name="keep"/> alone. A disabled Graphic draws
+        /// nothing and changes nothing else; deactivating its object would take its
+        /// children with it.
         /// </summary>
         private static void Hide(RectTransform rect, RectTransform keep)
         {
@@ -775,66 +713,41 @@ namespace GitView
                 : spawned.GetComponentInChildren<UnityEngine.UI.Slider>(true);
         }
 
-        private void SetTitle()
-        {
-            Transform bar = _window.transform.FindChild("TopBar");
-            Text label = bar == null ? null : bar.GetComponentInChildren<Text>(true);
-            if (label != null)
-            {
-                // At the size the prefab authors it, which is the size the history
-                // window's own title is written at -- both are asking for the same
-                // thing, so neither passes a number. It is what sets this window's
-                // width: the title has to fit between the two marks in its bar.
-                UIF.Style(label, 0, TextAnchor.MiddleCenter);
-                label.text = "BLOCK COLORS";
-                // As on the list's own bar: a title that takes the pointer takes it
-                // from the buttons underneath it.
-                label.raycastTarget = false;
-            }
-        }
-
         /// <summary>
-        /// The title bar's two controls: the cross that shuts the window, and the
-        /// reload arrow that puts every colour back the way it started.
+        /// The title bar: its name, the cross that shuts the window, and the reload
+        /// arrow that puts every colour back.
         ///
-        /// Up here rather than a "RESET ALL" button across the bottom of the form,
-        /// because it does not belong to any one row and it is not a fifth setting.
-        /// It is the same mark as the reload button on this author's other mod, where
-        /// it means the same thing.
-        ///
-        /// At the left-hand end, though, and not beside the cross: two marks in one
-        /// corner of a bar this narrow left the title to whatever room was left over,
-        /// and "BLOCK COLORS" is not a short title. One at each end gives it the
-        /// middle back.
+        /// The arrow is up here rather than a "RESET ALL" across the bottom of the
+        /// form: it belongs to no one row and is not a fifth setting. At the left-hand
+        /// end and not beside the cross, because two marks in one corner of a bar this
+        /// narrow leave the title whatever room is left over.
         /// </summary>
-        private void HookCloseButton()
+        private void BuildTitleBar()
         {
-            Transform bar = _window.transform.FindChild("TopBar");
+            RectTransform bar = UIBuild.TitleBar(_window);
             if (bar == null)
             {
                 return;
             }
-            RectTransform barRect = bar as RectTransform;
-
-            Transform close = bar.FindChild("CloseButton");
-            if (close != null)
-            {
-                UIBuild.SquareInBar(close as RectTransform, barRect, 0);
-                UIF.OnClick(close.gameObject, Close);
-            }
-            UIBuild.BarButton(barRect, 0, "Reset", ResetSprite(), QuietInk, Reset,
+            // At the size the prefab authors it, which is the size the history
+            // window's own title is written at -- both are asking for the same thing,
+            // so neither passes a number. It is what sets this window's width: the
+            // title has to fit between the two marks in its bar.
+            UIBuild.SetTitle(bar, "BLOCK COLORS");
+            UIBuild.HookClose(bar, Close);
+            UIBuild.BarButton(bar, 0, "Reset", ResetSprite(), UIBuild.QuietInk, Reset,
                               true);
         }
 
         /// <summary>
-        /// The reset arrow: the Clippy mod's reload mark, which sits in that mod's
-        /// title bar meaning the same thing -- put it back the way it was.
+        /// The reset arrow: the Clippy mod's reload mark, which means the same thing
+        /// in that mod's title bar -- put it back the way it was.
         /// </summary>
         private static Sprite ResetSprite()
         {
             if (_reset == null)
             {
-                _reset = HistoryView.Drawn(IconArt.Reload(IconPixels));
+                _reset = UIBuild.Drawn(IconArt.Reload(IconPixels));
             }
             return _reset;
         }
@@ -844,10 +757,7 @@ namespace GitView
         /// <summary>How big a title-bar mark is drawn before it is scaled to its button.</summary>
         private const int IconPixels = 64;
 
-        /// <summary>
-        /// How much of the top of the window its title bar takes, so the first row
-        /// starts under it rather than behind it.
-        /// </summary>
+        /// <summary>How much of the window the title bar takes off the top.</summary>
         private float TopBarHeight()
         {
             RectTransform bar = _window.transform.FindChild("TopBar") as RectTransform;
@@ -882,8 +792,8 @@ namespace GitView
 
         /// <summary>
         /// Takes a typed colour, as "#RRGGBB" or "RRGGBB". Anything unreadable puts
-        /// the real one back rather than guessing -- a box left saying something
-        /// that is not what the colour is would be worse than losing the edit.
+        /// the real one back: a box saying something that is not the colour would be
+        /// worse than losing the edit.
         /// </summary>
         private void OnHexTyped(int category, string typed)
         {
@@ -922,8 +832,7 @@ namespace GitView
             colour.a = Mathf.Clamp01(percent / 100f);
             Apply(category, colour);
             Slide(_opacities[category], colour.a);
-            // Written back rather than left as typed, so "300" becomes 100 in front
-            // of the player instead of silently.
+            // Written back, so "300" becomes 100 in front of the player.
             ShowPercent(category, colour.a);
         }
 
@@ -1066,12 +975,9 @@ namespace GitView
         // ------------------------------------------------------------- the colours
 
         /// <summary>
-        /// The colour a knob at this place along the strip picks: the hue under it,
-        /// at full strength.
-        ///
-        /// The strip is drawn pale and answers in full colour, which is what the
-        /// game's own slider does -- see <see cref="IconArt.Strip"/>. Any hue rather
-        /// than one of a list of stops: Besiege's is a smooth ramp and so is this.
+        /// The colour a knob at this place along the strip picks: the hue under it, at
+        /// full strength. The strip is drawn pale and answers in full colour, as the
+        /// game's own does -- see <see cref="IconArt.Strip"/>.
         /// </summary>
         private static Color Picked(float along)
         {
@@ -1079,9 +985,8 @@ namespace GitView
         }
 
         /// <summary>
-        /// Where along the strip a colour sits, which is where the knob goes when
-        /// the window is opened on a colour chosen before -- or written into the
-        /// preferences file by hand. A grey has no hue and comes back at the left.
+        /// Where along the strip a colour sits: where the knob goes when the window
+        /// opens. A grey has no hue and comes back at the left.
         /// </summary>
         private static float Along(Color colour)
         {
@@ -1092,11 +997,7 @@ namespace GitView
         {
             if (_strip == null)
             {
-                Texture2D drawn = IconArt.Strip(StripPixels, 8);
-                drawn.hideFlags = HideFlags.HideAndDontSave;
-                _strip = Sprite.Create(drawn, new Rect(0f, 0f, drawn.width, drawn.height),
-                                       new Vector2(0.5f, 0.5f));
-                _strip.hideFlags = HideFlags.HideAndDontSave;
+                _strip = UIBuild.Drawn(IconArt.Strip(StripPixels, 8));
             }
             return _strip;
         }
@@ -1104,9 +1005,9 @@ namespace GitView
         // ------------------------------------------------------------------ layout
 
         /// <summary>
-        /// Anchors a child to the window's top-left corner and sizes it in pixels.
-        /// Everything here is laid out down a running y, so top-left is the only
-        /// corner that stays still as the window grows.
+        /// Anchors a child to the window's top-left corner and sizes it in pixels:
+        /// everything here is laid out down a running y, and that is the only corner
+        /// that stays still as the window grows.
         /// </summary>
         private static void Place(RectTransform rect, float x, float y,
                                   float width, float height)
@@ -1133,7 +1034,7 @@ namespace GitView
             if (label != null)
             {
                 label.text = text;
-                label.color = QuietInk;
+                label.color = UIBuild.QuietInk;
                 label.raycastTarget = false;
             }
             return label;

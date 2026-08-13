@@ -10,16 +10,14 @@ namespace GitView
     /// Thin wrapper over UI Factory 3 (https://gitlab.com/dagriefaa/ui-factory-3),
     /// Workshop item 2913469777.
     ///
-    /// UIFactory ships Besiege's real UI as Unity prefabs -- the window frame, the
-    /// buttons, the font, the hover and press animations. Instantiating those is
-    /// the only way to look exactly like Besiege: the game's own panel materials
-    /// are reachable only from inside a custom mapper selector, and
-    /// <c>InternalModding</c> is on the mod loader's blacklist, so a hand-mixed
-    /// panel is always an approximation.
+    /// UIFactory ships Besiege's real UI as Unity prefabs -- window frame, buttons,
+    /// font, hover and press animations. Instantiating those is the only way to look
+    /// exactly like Besiege: the game's own panel materials are reachable only from
+    /// inside a custom mapper selector, and <c>InternalModding</c> is blacklisted.
     ///
-    /// Every call is funnelled through here so that one file knows the package and
-    /// prefab names, and so a missing UIFactory surfaces as a log line rather than
-    /// an exception thrown halfway through building the window.
+    /// Every call comes through here, so one file knows the prefab names and a
+    /// missing UIFactory is a log line rather than an exception thrown halfway
+    /// through building the window.
     /// </summary>
     public static class UIF
     {
@@ -28,24 +26,21 @@ namespace GitView
 
         // Prefab names, as registered by UIFactory's Mod.OnAllResourcesLoaded.
         public const string WindowPrefab = "Window";
-        public const string PanelPrefab = "Panel";
         public const string TextPrefab = "Text";
         public const string ButtonPrefab = "Text Button";
         public const string SliderPrefab = "Slider";
 
         /// <summary>
-        /// A button whose face is a picture rather than a word, with the Image to put
-        /// it on in a child called "Icon". The right thing for the marks on a title
-        /// bar: it is the prefab the close cross itself is made from, so a button
-        /// beside that one is the same size and shape without being told to be.
+        /// A button whose face is a picture rather than a word, on a child called
+        /// "Icon". What the close cross itself is made from, so a mark beside it is
+        /// the same size and shape without being told to be.
         /// </summary>
         public const string IconButtonPrefab = "Icon Button";
 
         /// <summary>
-        /// Besiege's text box. It carries UIFactory's
-        /// <c>StopsHotkeysWhenInputFieldFocused</c>, so typing a number into it does
-        /// not also fire the game's keyboard shortcuts -- which is the reason to use
-        /// the prefab rather than a uGUI InputField of one's own.
+        /// Besiege's text box. It carries <c>StopsHotkeysWhenInputFieldFocused</c>,
+        /// so typing a number does not also fire the game's shortcuts -- which is the
+        /// reason to use it over a uGUI InputField of one's own.
         /// </summary>
         public const string InputPrefab = "Input Field";
 
@@ -155,13 +150,10 @@ namespace GitView
         }
 
         /// <summary>
-        /// Fills the parent with a different inset on each side.
-        ///
-        /// Separate from <see cref="Stretch"/> because a column heading and the
-        /// values under it have to be inset by exactly the same amounts on exactly
-        /// the same sides, and those amounts are not symmetrical -- text is padded
-        /// away from the column edge it is aligned to by more than the edge it is
-        /// not.
+        /// Fills the parent with a different inset on each side. Separate from
+        /// <see cref="Stretch"/> because a heading and the values under it need the
+        /// same insets, and those are not symmetrical: text is padded away from the
+        /// edge it is aligned to by more than from the other.
         /// </summary>
         public static void StretchInset(RectTransform rect, float left, float right,
                                         float vertical)
@@ -178,9 +170,9 @@ namespace GitView
         }
 
         /// <summary>
-        /// Sets the caption on a UIFactory prefab. Their text lives on a child, and
-        /// carries a Translator that would overwrite whatever we assign the next
-        /// time the language changes -- so that gets removed for text we own.
+        /// Sets the caption on a UIFactory prefab. Their text lives on a child and
+        /// carries a Translator, which would overwrite ours at the next language
+        /// change -- so <see cref="Style"/> takes it off.
         /// </summary>
         public static Text Caption(GameObject go, string text, int fontSize, TextAnchor alignment)
         {
@@ -235,15 +227,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Finds and styles the label on a spawned UIFactory prefab, leaving the
-        /// prefab's own rect where the caller put it.
-        ///
-        /// The distinction matters and is easy to get wrong. On a `Text Button` the
-        /// label is a child, authored at a fixed width for the prefab's own size,
-        /// so it has to be stretched to whatever the control was resized to. On a
-        /// `Text` the label *is* the prefab, and stretching it throws away the
-        /// placement the caller just worked out -- which is how the status line
-        /// ended up anchored across the middle of the window instead of under it.
+        /// Finds and styles the label on a spawned prefab, leaving the prefab's own
+        /// rect where the caller put it. On a `Text Button` the label is a child
+        /// authored at a fixed width, so it has to be stretched to whatever the
+        /// control was resized to; on a `Text` the label *is* the prefab, and
+        /// stretching it would throw away the caller's placement.
         /// </summary>
         public static Text Label(GameObject go, int fontSize, TextAnchor alignment)
         {
@@ -284,17 +272,11 @@ namespace GitView
         }
 
         /// <summary>
-        /// Moves the edge a control's hover animation grows from.
-        ///
-        /// UIFactory's buttons swell about their pivot when the pointer is over
-        /// them, and they are pivoted in the middle. On a control as wide as a
-        /// whole row that carries its text visibly sideways — a left-aligned label
-        /// slides left, a right-aligned one slides right — which reads as the text
-        /// jumping rather than as the row lighting up. Pinning the pivot to the
-        /// edge the text is aligned to keeps that edge still, so the swell happens
-        /// entirely on the other side and the words do not move.
-        ///
-        /// Moving a pivot moves the rect, so the insets are put back afterwards.
+        /// Moves the edge a control's hover animation grows from. UIFactory's buttons
+        /// swell about their pivot, which is the middle: on a wide control that
+        /// carries the text visibly sideways. Pinning the pivot to the edge the text
+        /// is aligned to keeps that edge still. Moving a pivot moves the rect, so the
+        /// insets are put back afterwards.
         /// </summary>
         public static void PivotAnimation(GameObject control, float pivotX)
         {
@@ -331,21 +313,13 @@ namespace GitView
         /// <summary>
         /// Takes a control's hover swell away, for controls too wide to swell.
         ///
-        /// UIFactory grows a hovered button by 15% and shrinks a pressed one to
-        /// 85%, which is right for a button the size of a button. A table row is
-        /// seven hundred pixels wide, and 15% of that carries everything printed
-        /// near its ends tens of pixels sideways: the timestamp visibly jumps left
-        /// as the pointer arrives. No pivot fixes it, because a row has text at
-        /// both ends and a pivot can only hold one of them still.
+        /// A hovered button grows 15%, which is right for a button the size of a
+        /// button; on a seven-hundred-pixel row it carries the text at both ends tens
+        /// of pixels sideways, and no pivot fixes that because a pivot can only hold
+        /// one end still. So rows light up instead, as Besiege's own lists do.
         ///
-        /// So rows do not swell, and say they are under the pointer by lighting up
-        /// instead — which is what Besiege's own lists do, and what a row of a
-        /// table should do anyway.
-        ///
-        /// The two scales are private to UIFactory, so the animation is switched
-        /// off rather than turned down: a disabled behaviour is not a valid handler
-        /// as far as uGUI's event system is concerned, so it is never told the
-        /// pointer arrived.
+        /// Switched off rather than turned down, the two scales being private to
+        /// UIFactory: a disabled behaviour is never told the pointer arrived.
         /// </summary>
         public static void NoSwell(GameObject control)
         {
@@ -370,11 +344,8 @@ namespace GitView
 
         /// <summary>
         /// Makes a button tint one of its own images as the pointer arrives and
-        /// presses.
-        ///
-        /// uGUI drives the tint straight onto the graphic's canvas renderer, so the
-        /// image's own colour stops mattering once this is on — which is why the
-        /// caller passes every state rather than setting a colour and a highlight.
+        /// presses. uGUI drives the tint onto the graphic's canvas renderer, so the
+        /// image's own colour stops mattering -- hence every state is passed in.
         /// </summary>
         public static void HoverTint(Button button, Graphic target, Color normal,
                                      Color hovered, Color pressed)

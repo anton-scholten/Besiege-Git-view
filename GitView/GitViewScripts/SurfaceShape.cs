@@ -7,28 +7,21 @@ namespace GitView
     /// <summary>
     /// Works out where each build surface in a machine actually is.
     ///
-    /// A build surface is not one block but nine: the surface itself, four edges and
-    /// four corner nodes, each of them a block with a guid of its own. The surface
-    /// names its edges, an edge names the two nodes it runs between, and a node is
-    /// where a corner is. So the shape can only be worked out with the whole machine
-    /// in hand -- which is why it is a pass of its own, after every block has been
-    /// read, rather than something a block can answer about itself.
-    ///
-    /// Engine-free apart from Vector3, so the headless tests cover it: the walk round
-    /// the edges is the part that can be wrong, and it is wrong in ways that only
-    /// show up on a machine somebody built.
+    /// A surface is nine blocks -- itself, four edges, four corner nodes -- each with
+    /// its own guid: the surface names its edges, an edge names its two nodes, and a
+    /// node is where a corner is. So the shape needs the whole machine in hand, which
+    /// is why it is a pass of its own rather than something a block can answer.
+    /// Engine-free apart from Vector3, so the headless tests cover the walk.
     /// </summary>
     public static class SurfaceShape
     {
         /// <summary>
-        /// Fills in <see cref="BlockRecord.Corners"/> for every build surface in the
-        /// snapshot.
+        /// Fills in <see cref="BlockRecord.Corners"/> for every build surface.
         ///
-        /// The corners go into the block's settings as well, so that dragging a
-        /// corner counts as a change to the surface. Nothing else would notice it:
-        /// the surface's own position and its list of edge guids are the same before
-        /// and after, and the node that actually moved is a block with nothing to
-        /// draw.
+        /// The corners go into the block's settings too, so dragging a corner counts
+        /// as a change to the surface. Nothing else would notice: the surface's own
+        /// position and edge guids are the same before and after, and the node that
+        /// moved is a block with nothing to draw.
         /// </summary>
         public static void Link(MachineSnapshot snapshot)
         {
@@ -62,13 +55,10 @@ namespace GitView
         /// Follows one surface's edges round its outline.
         ///
         /// Walked as a loop rather than taken in the order the edges are named: the
-        /// corners have to come out in the order they go round the shape, which is
-        /// what drawing it needs, and the file promises only that the four edges join
-        /// up -- not that they are listed in that order.
-        ///
-        /// Anything that does not join up is left alone rather than guessed at. A
-        /// surface that cannot be resolved draws the way it always did: a mark at the
-        /// block's own position, which is one of its corners.
+        /// corners have to come out in the order they go round the shape, and the
+        /// file promises only that the edges join up. Anything that does not join up
+        /// is left alone rather than guessed at, and draws as its own ghost -- a mark
+        /// at one corner.
         /// </summary>
         private static void Resolve(BlockRecord surface,
                                     Dictionary<string, BlockRecord> byId)
@@ -146,10 +136,9 @@ namespace GitView
             surface.Corners = corners;
             surface.Settings = surface.Settings + "|corners:" + Flatten(corners);
 
-            // The pieces are spoken for: the surface now draws all of them, so they
-            // are not to be drawn again on their own. Marked only once the shape has
-            // been resolved -- a surface that could not be followed still needs its
-            // corners drawn by whatever can draw them.
+            // The pieces are spoken for: the surface draws all of them now. Marked
+            // only once the shape resolved, since a surface that could not be
+            // followed still needs its corners drawn by whatever can draw them.
             for (int i = 0; i < nodes.Length; i++)
             {
                 nodes[i].PartOfSurface = true;
