@@ -1,4 +1,4 @@
-# Git View
+# Besiege Git View
 
 See what changed between two versions of a machine, in [Besiege](https://store.steampowered.com/app/346010/Besiege/).
 
