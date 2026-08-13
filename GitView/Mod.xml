@@ -15,6 +15,9 @@ added lit green, the ones it moved or retuned orange, and the ones it deleted
 left behind as red ghosts.
 	</Description>
 
+	<Icon name="gitview-icon" />
+	<WorkshopThumbnail name="gitview-thumb" />
+
 	<Debug>false</Debug>
 
 	<!-- Reads the local autosave folder and loads machines into the build area.
@@ -45,9 +48,18 @@ left behind as red ghosts.
 		<Key name="toggle-history" defaultModifier="LeftControl" defaultTrigger="Y" />
 	</Keys>
 
-	<!-- No <Resources>. The button icon is drawn into a texture at runtime, and
-	     version thumbnails are the game's own PNGs read through its asset
-	     importer, so there is nothing for the loader to preload. -->
+	<!-- Only the mods-menu icon and the Workshop thumbnail. Everything else this
+	     mod draws is drawn at runtime (the branch button's own glyph into a
+	     texture, version thumbnails read as the game's own PNGs) so there is
+	     nothing else for the loader to preload.
+
+	     Both are written by tools/make_icon.py, which draws the same glyph over
+	     Background_for_icon.jpg. PNG rather than anything livelier: a Texture
+	     resource is decoded by Unity, which reads PNG and JPG only. -->
+	<Resources>
+		<Texture name="gitview-icon" path="icon.png" />
+		<Texture name="gitview-thumb" path="thumb.png" />
+	</Resources>
 
 
 

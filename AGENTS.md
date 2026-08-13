@@ -10,13 +10,16 @@ them when you learn something the hard way.
 
 ```
 GitView/                     the folder Besiege loads
-  Mod.xml                    manifest: assembly, keys
+  Mod.xml                    manifest: assembly, keys, icons
   GitViewScripts.dll         built by tools/build.sh (not in git)
   GitViewScripts/*.cs        mod source
+  Resources/icon.png,        the mods-menu logo and the Workshop
+    thumb.png                  thumbnail, by tools/make_icon.py
 tools/build.sh               compiles with Besiege's own compiler
 tools/verify-build.sh        the check to run after editing any .cs
 tools/run-tests.sh           the headless tests (tools/tests/)
 tools/install.sh             builds and installs into the game
+tools/make_icon.py           redraws the icons (needs Pillow)
 docs/MODDING-NOTES.md        the Besiege APIs this stands on
 ```
 
@@ -32,6 +35,7 @@ The sources divide along one line, and it is worth keeping:
 | `SurfaceShape.cs` a build surface's corners | `OptionsView.cs` choosing the colours |
 | `DiffPalette.cs` the four colours | `Selection.cs`, `SlotMark.cs` picking machines |
 | | `Prefs.cs` what is remembered |
+| | `ClickShield.cs` keeps clicks off the game |
 | | `IconArt.cs`, `Relative.cs`, `GitViewMod.cs` |
 
 The left column is where the mod is actually right or wrong, and `run-tests.sh`

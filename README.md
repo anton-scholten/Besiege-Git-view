@@ -46,6 +46,7 @@ standing where they were.
 | Let go of it | click the filled circle again |
 | Sort | click a heading; again to reverse |
 | Block colors | cog in the title bar |
+| Move the window | drag its title bar, or the strip under the list |
 | Show / hide the window | `Ctrl+Y` |
 
 ## Reading the list
@@ -132,6 +133,10 @@ itself, or from another block of the same type, or marked with a plain box.
 The window steps aside whenever the game puts a menu up and comes back with it, the
 way Besiege's own block panel behaves. Clearing the machine drops the overlay;
 opening a level does not, and the diff is drawn again once the machine arrives.
+
+Nothing behind the window can be clicked through it. Besiege's own popups and
+buttons are not the same kind of interface as this one and do not know they are
+covered, so while the pointer is over the window the game is told to ignore it.
 
 Retuning a block does not, on its own, make Besiege take an autosave. This mod tells
 it to, so a change you cannot see on the machine still gets a version to show up in.

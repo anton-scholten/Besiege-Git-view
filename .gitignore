@@ -6,6 +6,10 @@ GitView/GitViewScripts.dll.mdb
 # Written by the mod at runtime
 GitView/settings.txt
 
+# tools/make_icon.py --preview, for looking at the icon while working on it.
+# The icons it really writes, GitView/Resources/*.png, are kept.
+icon-preview.png
+
 # Anything the build or a debugging session leaves behind. tools/build.sh works
 # in $TMPDIR, which is normally outside the repo -- .scratch is where it goes
 # when it cannot be, and it holds a copy of the compiler host as well as whatever

@@ -608,6 +608,16 @@ Measure a screenshot — in this mod `CHANGED ▲▼` is 82 units of a 690-unit 
 font size 13 — and give the column enough width for it plus whatever the column
 gives up to a swatch.
 
+### Any part of a window can be a drag handle
+
+UI Factory puts a `Besiege.UI.Bridge.Drag` on the `Window` prefab's `TopBar` and
+nowhere else. It is a plain public component and can be added to anything: give
+it a raycast target to sit on — an `Image` with an alpha of zero is enough — and
+set `Target` to the rect you want moved. Set `Target` in the same breath as
+`AddComponent`, because `Drag.Start` fills a null one in with its own transform,
+and you would then be dragging the handle out of the window. This mod puts one
+on the strip under the list so the window has a second place to be grabbed.
+
 ### Whether a prefab's label is the prefab
 
 `Text Button`'s label is a child, authored at a fixed width for the prefab's own
@@ -617,6 +627,30 @@ placed it. Same call, opposite treatment, and the failure is silent: the status
 line in this mod ended up anchored across the middle of the window, looking for
 all the world like a placement bug. Check whether the `Text` you found is on the
 root before touching its rect.
+
+## A canvas over Besiege's UI does not stop it being clicked
+
+Besiege's popups and buttons are colliders answering Unity's `OnMouseOver`:
+`ClickBehaviour.OnMouseOver` calls `OnCursorOver`, which tests
+`InputManager.LeftMouseButton()` and fires. Those messages are raycast from the
+cameras and know nothing about the EventSystem, so a uGUI window drawn over one
+hides it without stopping it. The "this machine uses keys also used by your
+general control scheme" warning is a `WarningPopupBase`, and it took clicks
+aimed at this mod's window on top of it.
+
+Raising the canvas does not help — there is nothing to raise above. Only two
+places in `Assembly-CSharp` consult `EventSystem.IsPointerOverGameObject`
+(`AddPiece.CheckHudOcclusion` and `UIMask.InsideMask`), so block placement is
+already blocked by a canvas and nothing else is.
+
+**`Camera.eventMask` is the lever.** The layer mask a legacy mouse raycast uses
+is `cullingMask & eventMask`, so zeroing `eventMask` on every camera makes the
+whole game deaf to the mouse. `ClickShield` does that while the pointer is
+inside one of this mod's windows and puts each camera's own mask back the moment
+it leaves. Two things it has to get right: gather the cameras every frame, since
+one built while the shield is up is otherwise the hole in it, and release from
+`OnDisable` as well as when the pointer leaves — a shield left up is a game whose
+own buttons have stopped answering.
 
 ## Knowing when the game has a menu up
 

@@ -248,6 +248,9 @@ namespace GitView
         /// <summary>The options window, built the first time the cog is pressed.</summary>
         private OptionsView _options;
 
+        /// <summary>Keeps the game from being clicked through either window.</summary>
+        private readonly ClickShield _shield = new ClickShield();
+
         private static Sprite _gearFace;
 
         /// <summary>How big the cog is drawn before it is scaled to the button.</summary>
@@ -458,6 +461,9 @@ namespace GitView
             // getting that wrong leaves a destroyed window being called into.
             if (_built)
             {
+                // First, so that anything below throwing cannot leave the game's
+                // own cameras deaf to the mouse.
+                _shield.Follow();
                 Apply();
                 NotePosition();
                 if (_options != null)
@@ -645,6 +651,13 @@ namespace GitView
             }
         }
 
+        private void OnDisable()
+        {
+            // Before OnDestroy, and also for a disabling that is not one: either
+            // way there is no longer anything on screen to be shielding.
+            _shield.Release();
+        }
+
         private void OnDestroy()
         {
             Store();
@@ -682,6 +695,7 @@ namespace GitView
             Canvas.ForceUpdateCanvases();
             _windowRect.anchoredPosition = Fit(Prefs.Window(WindowHome));
             _placed = _windowRect.anchoredPosition;
+            _shield.Guard(_windowRect);
 
             HookCloseButton();
             if (!FindScrollView())
@@ -690,6 +704,7 @@ namespace GitView
             }
             BuildHeader();
             BuildStatusLine();
+            BuildBottomGrip();
             _built = true;
         }
 
@@ -761,6 +776,7 @@ namespace GitView
                 _options = new OptionsView(Recolour, Rescale);
             }
             _options.Toggle(_window.transform.parent, _window.transform as RectTransform);
+            _shield.Guard(_options.Rect);
             if (!_options.Visible)
             {
                 // Shutting it is when a colour is settled on, which is the moment
@@ -1182,6 +1198,50 @@ namespace GitView
             {
                 _status.color = UIBuild.QuietInk;
                 _status.text = string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Makes the strip under the list a second place to take hold of the
+        /// window.
+        ///
+        /// UI Factory puts its Drag on the title bar and nowhere else, and that is
+        /// 50 units at the top of a window most of a screen tall. The band the
+        /// status line is written across is the only other part of the frame with
+        /// nothing in it to press, so it is the one part that can be grabbed
+        /// without pressing something -- and it is exactly the room
+        /// <see cref="FindScrollView"/> took off the bottom of the list.
+        /// </summary>
+        private void BuildBottomGrip()
+        {
+            // Invisible, but a raycast target all the same, which is the whole of
+            // what Drag asks of the thing it is put on.
+            Image grip = UIBuild.AddImage(_window.transform, "Grip", ClearTint);
+            grip.raycastTarget = true;
+
+            RectTransform rect = grip.rectTransform;
+            rect.anchorMin = new Vector2(0f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(0f, StatusHeight + StatusMargin);
+            rect.anchoredPosition = Vector2.zero;
+            // Last, so the status line it is drawn over is behind it rather than
+            // in front of it taking the pointer first.
+            rect.SetAsLastSibling();
+
+            try
+            {
+                Besiege.UI.Bridge.Drag drag =
+                    grip.gameObject.AddComponent<Besiege.UI.Bridge.Drag>();
+                // Named before Drag's own Start runs, which would otherwise take
+                // the strip itself as the thing to move.
+                drag.Target = _windowRect;
+                drag.UseSnap = false;
+            }
+            catch (Exception)
+            {
+                // A UI Factory without that behaviour leaves the title bar, which
+                // is how this window has always been moved.
             }
         }
 

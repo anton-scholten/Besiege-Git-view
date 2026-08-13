@@ -121,6 +121,12 @@ namespace GitView
 
         private bool _wanted;
 
+        /// <summary>This window's own rect, or null before it is built.</summary>
+        public RectTransform Rect
+        {
+            get { return _rect; }
+        }
+
         /// <summary>
         /// Opens the window if it is shut and shuts it if it is open, beside the
         /// window it belongs to.
