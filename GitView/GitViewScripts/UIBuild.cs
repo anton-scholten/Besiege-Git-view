@@ -358,6 +358,9 @@ namespace GitView
             button.name = name;
             RectTransform rect = UIF.Rect(button);
             SquareInBar(rect, bar, place, leftEnd);
+            // Last in the bar, so that nothing drawn after it -- the title, whatever
+            // the prefab has -- is over it and taking the pointer first.
+            rect.SetAsLastSibling();
 
             Transform child = button.transform.FindChild("Icon");
             Image image = child == null ? null : child.GetComponent<Image>();
@@ -374,6 +377,16 @@ namespace GitView
                 image.preserveAspect = false;
                 Inside(image.rectTransform, rect.sizeDelta.x * IconShare);
             }
+
+            // What is actually clicked: the whole button, rather than whichever part
+            // of it the prefab happens to draw something on. A mark inset inside its
+            // button is a mark whose own edges miss, which is a button that works
+            // when aimed at and not when aimed near -- and the corner of a title bar
+            // is aimed at in a hurry.
+            Image reach = AddImage(rect, "Reach", new Color(1f, 1f, 1f, 0f));
+            reach.raycastTarget = true;
+            UIF.Stretch(reach.rectTransform, 0f, 0f);
+            reach.transform.SetAsFirstSibling();
 
             UIF.OnClick(button, clicked);
             return button;

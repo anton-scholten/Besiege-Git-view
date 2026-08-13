@@ -86,14 +86,20 @@ its changes drawn over it:
 - **orange** — blocks it moved, rotated, rescaled or retuned
 - **red** — blocks it deleted, left standing where they used to be
 
-Some blocks are not the shape their icon is. A brace, a spring, a rope or a fuel
-hose is stretched between two points; a build surface is nine blocks in the save —
-the surface, four edges and four corner nodes — whose edges are curves and whose
-outline only the corners know. For all of those, what is drawn over the block is a
-copy of the mesh the game itself generated for it: exactly the shape you are
-looking at, curves and length and thickness included. A block a save *deleted* has
-no mesh left to copy, so it is drawn from what the file says instead — a tube
-along the span, a flat slab through the corners.
+What is drawn over a block is Besiege's own placement ghost of it — the
+translucent preview it shows while you drag a block out of the menu — which is
+already the right shape for that kind of block. Braces, hoses and ropes get a tube
+along their length as well, since a dragged block is not where its ghost is. A
+build surface is the exception: its ghost is a mark at one of its four corners,
+so what is drawn over one is a copy of the mesh the machine generated for it,
+curved edges and all, and a surface a save *deleted* is drawn as a flat slab
+through the corners the file names.
+
+A few block types have no ghost worth drawing — the drag panel is one. Those are
+copied out of the machine itself where the block is still in it, and where it is
+not, they borrow the look of another block of the same type. If there is no such
+block either, a plain box marks the spot: a block counted as changed and pointed
+at with nothing is the worst of the answers.
 
 The window opens on its own top row with nothing pinned: the first row is loaded
 and compared with the second, which is the same thing the counts beside it are
@@ -111,7 +117,14 @@ the pin and the sort, so it always points at the pair the status line is
 describing.
 
 The cog in the window's title bar, beside the cross, opens **block colors**
-alongside the list, tops level: all
+alongside the list, tops level. At the top of it is `size`: how much larger than
+its block each coloured shell is drawn, as a multiple of the block — 1 is the
+block itself. The slider covers 0.9 to 1.3, which is where the answer is on any
+ordinary machine, and the box beside it takes anything from 0.5 to 2 for a machine
+that is not ordinary: half size to see a shell that is buried inside its block,
+double to find one at all. Each shell grows about its own middle, so a block ends
+up inside its mark rather than sliding out of one corner of it.
+Under that are all
 four at once — unchanged, added, changed, removed — each on the same colour slider
 Besiege puts on a block, with its own opacity slider under it and a box beside
 each for typing an exact value: `#RRGGBB` for the colour, a percentage for the
@@ -119,7 +132,8 @@ opacity. Whatever you choose
 is used for both the counts in the list and the blocks over the machine — the text
 always at full strength, the blocks at the opacity you set, so you can make a
 change stand out against a dark machine or fade it back until you can see what is
-underneath. The reset arrows in the corner of that window put every colour back.
+underneath. The reset arrows in the corner of that window put every colour, and the size,
+back.
 
 Four colours rather than three: the first is everything the save left alone —
 the blocks that were neither added, changed nor removed, which is most of what
@@ -209,6 +223,11 @@ Positions, rotations and block settings are compared with a tolerance, because
 they are stored as decimal text and read back through a fast float parser, and
 because some settings hold live physics values that come back a hair different
 every save even when nobody has touched the machine.
+
+A block is counted once. If the same identifier turns up as both an addition and
+a change — which a machine holding two blocks with the same identifier can
+produce, since Besiege reissues them — it counts as an addition, since "there is
+something here that was not here before" is the larger fact.
 
 Measured over six real machines and 153 version pairs, this agrees exactly with
 an independent implementation of the same rules, and leaves about one

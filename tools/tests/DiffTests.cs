@@ -184,6 +184,19 @@ public static class DiffTests
         Is("reissued and relocated is an addition", 1, far.Added.Count);
         Is("reissued and relocated is a removal", 1, far.Removed.Count);
 
+        // A block cannot be both new and altered. Besiege reissues identifiers, so a
+        // machine can hold two blocks carrying the same one: one of the two pairs up
+        // and the other does not, and without this the same identifier stands in both
+        // columns and is drawn twice on the machine, green and orange at once.
+        MachineSnapshot twiceBefore = Machine(Block("t", 1, 0, 0, 0));
+        BlockRecord moved = Block("t", 1, 0, 0, 0);
+        moved.Position = new Vector3(0.2f, 0f, 0f);
+        MachineSnapshot twiceAfter = Machine(moved, Block("t", 1, 8, 0, 0));
+        DiffResult twice = BlockDiff.Compare(twiceBefore, twiceAfter);
+        Is("a block that is both new and altered is counted as new", 1,
+           twice.Added.Count);
+        Is("and not as a change as well", 0, twice.Changed.Count);
+
         // A different block type in the same place is a replacement, not a move,
         // however close it sits.
         BlockRecord swapped = Block("REISSUED", 7, 1, 0, 0);

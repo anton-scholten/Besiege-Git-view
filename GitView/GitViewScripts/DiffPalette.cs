@@ -54,9 +54,9 @@ namespace GitView
         /// </summary>
         private static readonly Color[] Fallbacks =
         {
-            new Color(0.000f, 1.000f, 0.000f, 0.30f),
-            new Color(1.000f, 1.000f, 0.000f, 0.30f),
-            new Color(0.996f, 0.000f, 0.000f, 0.30f),
+            new Color(0.000f, 1.000f, 0.000f, 0.20f),
+            new Color(1.000f, 1.000f, 0.000f, 0.20f),
+            new Color(0.996f, 0.000f, 0.000f, 0.20f),
             new Color(0.000f, 1.000f, 1.000f, 0.00f)
         };
 
@@ -135,6 +135,54 @@ namespace GitView
         public static Color Default(int category)
         {
             return Valid(category) ? Fallbacks[category] : Color.white;
+        }
+
+        // How much larger than the block a shell over it is drawn, and how far the
+        // player may take that. A shell is a coat of paint: at 1 it is exactly the
+        // block, sharing its surface and fighting it for pixels, and much past a
+        // tenth larger it stops looking like the block underneath and starts hiding
+        // its neighbours.
+        //
+        // Two ranges, because they are two questions. The slider covers the sizes
+        // worth dragging through -- a shade under the block to a third over it, which
+        // is where the answer is on any ordinary machine -- and what may be *typed*
+        // is wider than that, for the machine that is not ordinary: half size to see
+        // a shell inside a block it is buried in, double to find one at all.
+        public const float ShellLeast = 0.5f;
+        public const float ShellMost = 2f;
+        public const float ShellSlideLeast = 0.9f;
+        public const float ShellSlideMost = 1.3f;
+        private const float ShellFallback = 1.03f;
+        private static float _shell = -1f;
+
+        /// <summary>
+        /// How much larger than its block each shell is drawn. Applied about each
+        /// shell's own middle, so that a block ends up inside its mark rather than
+        /// sliding out of one corner of it.
+        /// </summary>
+        public static float Shell
+        {
+            get
+            {
+                if (_shell < 0f)
+                {
+                    _shell = Mathf.Clamp(Prefs.Shell(ShellFallback), ShellLeast,
+                                         ShellMost);
+                }
+                return _shell;
+            }
+        }
+
+        public static void SetShell(float swell)
+        {
+            _shell = Mathf.Clamp(swell, ShellLeast, ShellMost);
+            Prefs.SetShell(_shell);
+        }
+
+        /// <summary>The size a shell started the session at.</summary>
+        public static float DefaultShell
+        {
+            get { return ShellFallback; }
         }
 
         public static string Name(int category)

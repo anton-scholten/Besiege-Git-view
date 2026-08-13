@@ -99,6 +99,21 @@ namespace GitView
             Write(WindowYKey, at.y);
         }
 
+        // --------------------------------------------------------------- the shells
+
+        /// <summary>How much larger than its block a shell is drawn.</summary>
+        public static float Shell(float fallback)
+        {
+            return Number(ShellKey, fallback);
+        }
+
+        public static void SetShell(float swell)
+        {
+            Write(ShellKey, swell);
+        }
+
+        private const string ShellKey = "shell-swell";
+
         // ------------------------------------------------------------- the colours
 
         public static Color Colour(int category, Color fallback)

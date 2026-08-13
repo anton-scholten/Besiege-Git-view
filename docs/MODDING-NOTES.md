@@ -774,6 +774,65 @@ generated the mesh**. Copy the block's `MeshFilter.sharedMesh` onto a plain
 GameObject rather than reimplementing the patch — exact curves, exact thickness,
 no maths. Only a *removed* surface has nothing to copy.
 
+That shortcut looks like it should be taken for **every** block, and it was, and
+it was taken back out. In theory a copy hung off the block's own renderer is exact
+where a ghost is only the block as it comes out of the menu; in practice, on real
+machines, wheels and cannons came out worse than the ghosts they replaced. Keep it
+for the build surface, which has no usable ghost at all, and let the ghosts do the
+rest.
+
+**A ghost prefab is not necessarily built at full size.** Writing the block's own
+scale onto a spawned ghost throws away whatever the prefab was authored at, and a
+cannon's is not 1 — so the mark came out half again too big. Multiply the two:
+the prefab's scale for the shape, the block's for what the player scaled it to.
+
+For the block types whose ghost has nothing on it — Besiege has a few — copy the
+block itself out of the machine where it is still there, and fall back to another
+block of the same type for one the version deleted, placed at the record's own
+transform. `BlockBehaviour.BlockID` is the type, so one pass over
+`Machine.BuildingBlocks` gives you both a guid index and a type index.
+
+Take the mesh off a `SkinnedMeshRenderer` with `BakeMesh`, and remember that it
+has no `MeshFilter` at all: a fuel hose, a rope and a spring are skinned, and
+skipping them leaves the block marked at whatever solid fitting is on the end of
+it and nowhere else. A baked mesh is made rather than borrowed, so destroy it
+with the overlay — a runtime Mesh is not collected when the object holding it
+goes.
+
+**Check what a bake gives you back.** It can be empty — no pose yet, no bones —
+and an empty mesh is a shell that is present, painted, counted as drawn and
+invisible. It can also land in a space that is not the renderer's, depending on
+where the mesh's root bone is: a fuel hose baked that way came out as a spike of
+black threads reaching towards the machine's origin. There is no way to ask which
+space it chose, so measure it: `renderer.bounds` is world units and known good,
+and a bake whose bounds are out by more than a factor of three is not a copy of
+that renderer. Fall back to the plain drawing when it fails.
+
+The same suspicion applies to a **placement ghost**: some block types have a ghost
+prefab with no geometry on it at all, and spawning one gives you a shell that
+counts as drawn and shows nothing. Check for a mesh with vertices before adopting
+it, and keep a last resort — a plain box where the block is — for a type that has
+neither. A block the list calls changed and the machine does not mark is the worst
+answer available.
+
+**Hang the copy off the transform that is drawing the original.** Copying a
+renderer's position, rotation and `lossyScale` onto an object parented somewhere
+else is exact only while nothing above it is scaled unevenly, and Besiege's blocks
+are: a wheel stretched to 1.5 × 1 × 0.7 with its rim on a rotated child cannot be
+described by any position-rotation-scale triple, so the copy comes out the wrong
+shape and the wrong size — which looks exactly like the mod ignoring the resize.
+A child of the renderer's own transform, at identity, is exact by construction.
+
+**Do not bake the matrix into the vertices instead.** Block meshes are not
+readable: `mesh.vertices` on one prints "Not allowed to access vertices on mesh
+'SM_fuel_tank_small…'" and hands back an empty array, so the copy is silently
+empty and the console fills up. `mesh.bounds` *is* readable — it is metadata, not
+mesh data — which is enough to put a pivot at the middle of a mesh you cannot
+otherwise inspect.
+
+Copies parented into the machine are not under the mod's own container, so they
+have to be hidden, recoloured and destroyed by hand.
+
 Copy the meshes, **not the block**. `Instantiate` on a live block runs its Awake,
 and a `BuildSurface` waking up registers itself with the machine it finds itself
 in — the copy becomes a real surface in the real machine, and the next save has

@@ -831,6 +831,11 @@ namespace GitView
             if (label != null)
             {
                 label.text = string.IsNullOrEmpty(title) ? "HISTORY" : title.ToUpper();
+                // A title is to be read, not pressed. Its box is the whole width of
+                // the bar and it is drawn over the two controls in the corner, so
+                // while it took the pointer the cog only answered on whatever part of
+                // it the title did not reach.
+                label.raycastTarget = false;
             }
         }
 
@@ -908,7 +913,7 @@ namespace GitView
         {
             if (_options == null)
             {
-                _options = new OptionsView(Recolour);
+                _options = new OptionsView(Recolour, Rescale);
             }
             _options.Toggle(_window.transform.parent, _window.transform as RectTransform);
             if (!_options.Visible)
@@ -967,6 +972,13 @@ namespace GitView
         private const float ArrowInk = 2.5f;
         private const float ArrowHead = 16f;
         private const float ArrowHeadHalf = 10f;
+
+        /// <summary>
+        /// How much of that the head at the end is drawn at. Smaller than the ones
+        /// down the run: those are read at a glance from anywhere in the list, while
+        /// this one is next to the circle it is pointing at and only has to reach it.
+        /// </summary>
+        private const float TipShare = 0.6f;
 
         /// <summary>
         /// How far into a row the arrow goes at each end: the near edge of the pin
@@ -1067,10 +1079,16 @@ namespace GitView
             Bar(_arrow[0], ArrowSpine, startY - half, ArrowReach - ArrowSpine, ArrowInk);
             Bar(_arrow[1], ArrowSpine, Mathf.Min(startY, endY) - half, ArrowInk,
                 Mathf.Abs(endY - startY) + ArrowInk);
+            // Up to where the head begins, which is not where a full-sized head would
+            // have begun: the head is drawn at a share of its own size, and a line
+            // that stopped short of it left the point floating clear of the arrow it
+            // belongs to.
             Bar(_arrow[2], ArrowSpine, endY - half,
-                Mathf.Max(0f, ArrowReach - ArrowSpine - ArrowHead), ArrowInk);
-            Bar(_arrowHead, ArrowReach - ArrowHead, endY - ArrowHeadHalf, ArrowHead,
-                ArrowHeadHalf * 2f);
+                Mathf.Max(0f, ArrowReach - ArrowSpine - ArrowHead * TipShare),
+                ArrowInk);
+            Bar(_arrowHead, ArrowReach - ArrowHead * TipShare,
+                endY - ArrowHeadHalf * TipShare, ArrowHead * TipShare,
+                ArrowHeadHalf * TipShare * 2f);
             MarkSpine(startY, endY);
         }
 
@@ -1288,6 +1306,18 @@ namespace GitView
             _ghosts.Refresh();
             // DiffPalette has already stored the colour; this is what says there is
             // something to flush when the picker is put away.
+            _dirty = true;
+        }
+
+        /// <summary>
+        /// Takes a new shell size through to the overlay. Nothing is drawn again for
+        /// it: every shell hangs off a pivot at its own middle, and this is those
+        /// pivots being scaled -- which is what makes it usable while the slider is
+        /// being dragged.
+        /// </summary>
+        private void Rescale()
+        {
+            _ghosts.Rescale();
             _dirty = true;
         }
 

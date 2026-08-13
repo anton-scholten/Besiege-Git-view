@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -117,10 +118,13 @@ namespace GitView
         /// </summary>
         private bool _binding;
 
-        public OptionsView(Action<int> changed)
+        public OptionsView(Action<int> changed, Action resized)
         {
             _changed = changed;
+            _resized = resized;
         }
+
+        private readonly Action _resized;
 
         /// <summary>
         /// Whether the player has this window open -- which is not the same as
@@ -281,6 +285,7 @@ namespace GitView
             }
 
             float y = TopBarHeight() + Pad;
+            y = BuildShell(y);
             for (int i = 0; i < Order.Length; i++)
             {
                 y = BuildRow(Order[i], y);
@@ -289,6 +294,136 @@ namespace GitView
             _rect.sizeDelta = new Vector2(Width, y - BlockGap + Pad);
             _window.SetActive(false);
             return true;
+        }
+
+        /// <summary>
+        /// How much larger than its block each coloured shell is drawn, at the top
+        /// because it is about all four colours rather than any one of them.
+        ///
+        /// A shell at exactly the block's size shares its surface, and two surfaces
+        /// in the same place is a fight the graphics card settles pixel by pixel. A
+        /// little larger is a coat of paint; larger still is a marker you can pick
+        /// out of a crowded machine from across the build area. Which of those a
+        /// player wants depends on the machine, so it is a slider rather than a
+        /// number this mod chose.
+        /// </summary>
+        private float BuildShell(float y)
+        {
+            GameObject spawned = UIF.Spawn(UIF.SliderPrefab, _rect);
+            if (spawned == null)
+            {
+                return y;
+            }
+            spawned.name = "Shell size";
+            float high = Tall(spawned);
+
+            Text label = Caption("SIZE", TextAnchor.MiddleLeft);
+            if (label != null)
+            {
+                Place(label.rectTransform, Pad, y, LabelWidth, high);
+                label.color = Color.white;
+            }
+
+            float left = Pad + LabelWidth;
+            float right = Width - Pad - ValueWidth;
+            Place(UIF.Rect(spawned), left, y, right - BoxGap - left, high);
+
+            UnityEngine.UI.Slider slider = Slid(spawned);
+            if (slider == null)
+            {
+                UnityEngine.Object.Destroy(spawned);
+                return y + high + BlockGap;
+            }
+            slider.wholeNumbers = false;
+            slider.minValue = DiffPalette.ShellSlideLeast;
+            slider.maxValue = DiffPalette.ShellSlideMost;
+            slider.value = Mathf.Clamp(DiffPalette.Shell, slider.minValue,
+                                       slider.maxValue);
+
+            _shellBox = Box(DiffPalette.Unchanged, right, y, high, 4, false);
+            if (_shellBox != null)
+            {
+                // Not one of the colour boxes: this one is a multiplier written as
+                // itself -- 1 is the block's own size -- and it takes values from
+                // outside what the slider will slide to, so it needs its own
+                // validation and its own handler.
+                _shellBox.characterValidation = InputField.CharacterValidation.Decimal;
+                _shellBox.onEndEdit.RemoveAllListeners();
+                _shellBox.onEndEdit.AddListener(delegate(string typed)
+                {
+                    OnShellTyped(typed);
+                });
+            }
+            _shell = slider;
+            ShowShell(slider.value);
+
+            slider.onValueChanged.AddListener(delegate(float moved)
+            {
+                OnShellMoved(moved);
+            });
+            return y + high + BlockGap;
+        }
+
+        private UnityEngine.UI.Slider _shell;
+        private InputField _shellBox;
+
+        private void OnShellMoved(float swell)
+        {
+            if (_binding)
+            {
+                return;
+            }
+            DiffPalette.SetShell(swell);
+            ShowShell(swell);
+            if (_resized != null)
+            {
+                _resized();
+            }
+        }
+
+        /// <summary>
+        /// Takes a typed size, as a multiple of the block's own: 1 is the block, 1.5
+        /// is half again. Anything unreadable puts the real one back rather than
+        /// guessing.
+        /// </summary>
+        private void OnShellTyped(string typed)
+        {
+            if (_binding)
+            {
+                return;
+            }
+            float swell;
+            if (!float.TryParse(typed == null ? string.Empty : typed.Trim(),
+                                NumberStyles.Float, CultureInfo.InvariantCulture,
+                                out swell))
+            {
+                ShowShell(DiffPalette.Shell);
+                return;
+            }
+            DiffPalette.SetShell(swell);
+            // The slider only slides through the middle of what may be typed, so a
+            // number outside its range leaves it at whichever end it stopped at --
+            // which is honest: the knob is as far that way as it goes.
+            Slide(_shell, DiffPalette.Shell);
+            ShowShell(DiffPalette.Shell);
+            if (_resized != null)
+            {
+                _resized();
+            }
+        }
+
+        private void ShowShell(float swell)
+        {
+            if (_shellBox == null)
+            {
+                return;
+            }
+            _binding = true;
+            // Written the way it is read, and in the invariant culture: a size typed
+            // as "1.15" has to come back as "1.15" wherever the player's machine
+            // thinks the decimal point goes.
+            _shellBox.text = swell.ToString("0.00", CultureInfo.InvariantCulture);
+            _binding = false;
         }
 
         /// <summary>
@@ -652,6 +787,9 @@ namespace GitView
                 // width: the title has to fit between the two marks in its bar.
                 UIF.Style(label, 0, TextAnchor.MiddleCenter);
                 label.text = "BLOCK COLORS";
+                // As on the list's own bar: a title that takes the pointer takes it
+                // from the buttons underneath it.
+                label.raycastTarget = false;
             }
         }
 
@@ -860,6 +998,11 @@ namespace GitView
                     _changed(category);
                 }
             }
+            DiffPalette.SetShell(DiffPalette.DefaultShell);
+            if (_resized != null)
+            {
+                _resized();
+            }
             Bind();
         }
 
@@ -882,7 +1025,12 @@ namespace GitView
                 ShowHex(category, colour);
                 Wear(category);
             }
+            if (_shell != null)
+            {
+                _shell.value = DiffPalette.Shell;
+            }
             _binding = false;
+            ShowShell(DiffPalette.Shell);
         }
 
         /// <summary>Writes a value into its box without that counting as an edit.</summary>

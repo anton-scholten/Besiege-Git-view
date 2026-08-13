@@ -103,7 +103,45 @@ namespace GitView
             }
             result.Added.AddRange(unpairedAfter);
             result.Removed.AddRange(unpairedBefore);
+            OnceEach(result.Added, result.Changed);
             return result;
+        }
+
+        /// <summary>
+        /// Makes sure no block is counted twice, and that a block which is both new
+        /// and altered is counted as new.
+        ///
+        /// The passes above pair each block at most once, so in an ordinary machine
+        /// this finds nothing. What it is for is a machine where two blocks carry the
+        /// same identifier -- which Besiege can produce, since it reissues them --
+        /// and one of the two pairs up while the other does not: the same block then
+        /// stands in both columns, and is drawn twice on the machine, once green and
+        /// once orange.
+        ///
+        /// Added wins. "There is something here that was not here before" is the
+        /// larger fact; that it also differs from a block it shares an identifier
+        /// with is bookkeeping, and counting it under both makes the two columns add
+        /// up to more blocks than the save has.
+        /// </summary>
+        private static void OnceEach(List<BlockRecord> added, List<BlockRecord> changed)
+        {
+            if (added.Count == 0 || changed.Count == 0)
+            {
+                return;
+            }
+
+            Dictionary<string, bool> isNew = new Dictionary<string, bool>();
+            for (int i = 0; i < added.Count; i++)
+            {
+                isNew[added[i].Id ?? string.Empty] = true;
+            }
+            for (int i = changed.Count - 1; i >= 0; i--)
+            {
+                if (isNew.ContainsKey(changed[i].Id ?? string.Empty))
+                {
+                    changed.RemoveAt(i);
+                }
+            }
         }
 
         /// <summary>Pass 1: blocks that kept their guid.</summary>
