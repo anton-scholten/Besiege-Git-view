@@ -573,7 +573,7 @@ is the one an unqualified `Slider` binds to inside this mod. Write
 ### A text box that does not also drive the game
 
 Use UIFactory's `Input Field` prefab rather than a uGUI `InputField` of your own:
-it carries `StopsHotkeysWhenInputFieldFocused`, without which typing `255` also
+it carries `Besiege.UI.Bridge.Effects.StopsHotkeysWhenInputFieldFocused`, without which typing `255` also
 fires whatever Besiege has bound to 2, 5 and 5.
 
 Commit on `onEndEdit`, not `onValueChanged` — the latter applies the `2` of a
