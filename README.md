@@ -1,8 +1,8 @@
 # Besiege Git View
 
-See what changed between two versions of a machine, in [Besiege](https://store.steampowered.com/app/346010/Besiege/).
+<img src="GitView/Resources/thumb.png" alt="thumbnail" width="200" align="right">
 
-![Version 8 of a rover, with what it changed drawn over the machine](Promo_1.jpg)
+See what changed between two versions of a machine, in [Besiege](https://store.steampowered.com/app/346010/Besiege/).
 
 Besiege has kept a backup of your machine every minute and every save for years,
 in `SavedMachines/AutoSave`. Its own versions button drops you in a folder of a
@@ -11,6 +11,8 @@ reads that history and shows you the blocks that changed.
 
 **Requires [UI Factory](https://steamcommunity.com/sharedfiles/filedetails/?id=2913469777)**
 (another Besiege mod which enables the nice UI, see workshop item `2913469777`) or the mod won't load.
+
+<br clear="right">
 
 ## Install
 
@@ -26,6 +28,8 @@ Set `BESIEGE_DIR` if your install isn't found automatically.
 Start Besiege, enable **GitView** in the mods menu, and enter a level, the sandbox or the level editor.
 
 ## Opening a history
+
+![Version 8 of a rover, with what it changed drawn over the machine](Promo_1.jpg)
 
 Click the branch icon on the screen to load a machine: either on an autosave folder or select multiple machines and compare them.
 The newest/last selected machine loads with a window besides it where each row is a different autosave or individually selected machine.
